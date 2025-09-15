@@ -11,7 +11,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Plus, Trash2, Eye, Save, Type, List, Star, ToggleLeft } from "lucide-react";
 import Header from "@/components/Header";
 import { toast } from "sonner";
-import { createSurveyAPI, addQuestion } from "@/api/Api";
+import { createSurveyAPI, addQuestionAPI } from "@/api/Api";
 
 interface Question {
   id: string;
@@ -33,7 +33,8 @@ const SurveyCreate = () => {
     description: "",
     questions: []
   });
-  
+  const [maxResponses, setMaxResponses] = useState<number | null>(null);
+  const [isLimited, setIsLimited] = useState(false); // Có bật giới hạn hay không
   const [showPreview, setShowPreview] = useState(false);
   const [newQuestion, setNewQuestion] = useState<Partial<Question>>({
     type: 'text',
@@ -91,49 +92,36 @@ const SurveyCreate = () => {
   };
 
   const saveSurvey = async () => {
+    if (!survey.title) return toast.error("Nhập tiêu đề");
+    if (survey.questions.length === 0) return toast.error("Chưa có câu hỏi");
+
+    const token = localStorage.getItem("token");
+    if (!token) return toast.error("Cần đăng nhập");
+
     try {
-      if (!survey.title) {
-        toast.error("Vui lòng nhập tiêu đề khảo sát");
-        return;
-      }
-      if (survey.questions.length === 0) {
-        toast.error("Vui lòng thêm ít nhất một câu hỏi");
-        return;
-      }
-  
-      const token = localStorage.getItem("token");
-      if (!token) {
-        toast.error("Bạn cần đăng nhập để tạo khảo sát");
-        return;
-      }
-  
-      // 1️⃣ Tạo khảo sát
       const newSurvey = await createSurveyAPI(token, {
         title: survey.title,
         description: survey.description,
         is_active: true,
       });
-  
       const formId = newSurvey.ID || newSurvey.id;
       if (!formId) throw new Error("Không lấy được ID khảo sát");
-  
-      // 2️⃣ Thêm câu hỏi
+
       for (const q of survey.questions) {
         const payload = {
-          loai_cau_hoi: q.type.toUpperCase(), // BE dùng ENUM TEXT, MULTIPLE_CHOICE, ...
-          noi_dung: q.title,
-          props: { required: q.required },
-          lua_chons: q.options?.map((opt) => ({ noi_dung: opt })) || [],
+          type: q.type.toUpperCase(),
+          content: q.title,
+          props: { required: q.required, options: q.options || [] } // JSON object
         };
-        await addQuestion(formId, payload, token);
+        await addQuestionAPI(formId, payload, token);
       }
-  
+
       toast.success("Đã lưu khảo sát và câu hỏi vào database!");
     } catch (err: any) {
-      console.error(err);
-      toast.error(err.message || "Có lỗi khi lưu khảo sát");
+      toast.error(err.message || "Lỗi khi lưu khảo sát");
     }
   };
+
   const addOption = () => {
     if (newQuestion.type === 'multiple-choice') {
       setNewQuestion(prev => ({
@@ -160,7 +148,7 @@ const SurveyCreate = () => {
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      
+
       <main className="container max-w-4xl mx-auto py-8 px-4">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-foreground mb-2">Tạo khảo sát mới</h1>
@@ -192,11 +180,35 @@ const SurveyCreate = () => {
                   onChange={(e) => setSurvey(prev => ({ ...prev, description: e.target.value }))}
                 />
               </div>
+              <div className="flex items-center gap-2 mt-2">
+                <input
+                  type="checkbox"
+                  id="limitResponses"
+                  checked={isLimited}
+                  onChange={(e) => {
+                    setIsLimited(e.target.checked);
+                    if (!e.target.checked) setMaxResponses(null);
+                  }}
+                />
+                <Label htmlFor="limitResponses">Giới hạn số lần trả lời</Label>
+              </div>
+
+              {isLimited && (
+                <div className="mt-2">
+                  <Input
+                    type="number"
+                    min={1}
+                    placeholder="Nhập số lần trả lời tối đa"
+                    value={maxResponses || ''}
+                    onChange={(e) => setMaxResponses(Number(e.target.value))}
+                  />
+                </div>
+              )}
             </CardContent>
           </Card>
 
           {/* Questions List */}
-          
+
           {/* Add Question */}
           <Card>
             <CardHeader>

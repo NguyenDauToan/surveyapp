@@ -39,9 +39,12 @@ const Header = () => {
           >
             Tạo khảo sát
           </Link>
-          <a href="#" className="text-sm font-medium text-foreground/80 hover:text-foreground transition-colors">
+          <Link
+            to="/my-surveys"
+            className="text-sm font-medium text-foreground/80 hover:text-foreground transition-colors"
+          >
             Khảo sát của tôi
-          </a>
+          </Link>
 
         </nav>
 
@@ -92,12 +95,18 @@ const Header = () => {
       {isMenuOpen && (
         <div className="md:hidden border-t border-border/40 bg-background/95 backdrop-blur">
           <nav className="container py-4 space-y-3">
-            <a href="#" className="block text-sm font-medium text-foreground/80 hover:text-foreground transition-colors">
+            <Link
+              to="/create"
+              className="text-sm font-medium text-foreground/80 hover:text-foreground transition-colors"
+            >
               Tạo khảo sát
-            </a>
-            <a href="#" className="block text-sm font-medium text-foreground/80 hover:text-foreground transition-colors">
+            </Link>
+            <Link
+              to="/my-surveys"
+              className="text-sm font-medium text-foreground/80 hover:text-foreground transition-colors"
+            >
               Khảo sát của tôi
-            </a>
+            </Link>
 
 
             <div className="pt-2 space-y-2">

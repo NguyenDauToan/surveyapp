@@ -7,6 +7,7 @@ import Demo from "./pages/Demo";
 import NotFound from "./pages/NotFound";
 import LoginDialog from "./layout/LoginDialog";
 import SurveyCreate from "./pages/SurveyCreate";
+import MySurveys from "./pages/MySurveys";
 
 const queryClient = new QueryClient();
 
@@ -21,6 +22,8 @@ const App = () => (
           path="/login"
           element={<LoginDialog open={true} onOpenChange={() => { }} />}
         />
+        <Route path="/my-surveys" element={<MySurveys />} />
+
         <Route path="/create" element={<SurveyCreate />} />
 
         <Route path="*" element={<NotFound />} />
