@@ -39,7 +39,8 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
   const googleButtonRef = useRef<HTMLDivElement | null>(null);
 
   const handleCredentialResponse = async (response: GoogleCredentialResponse) => {
-    if (!response.credential) return;
+    console.log("Credential response:", response);
+    if (!response.credential) return console.error("❌ Không nhận được ID Token từ Google");
 
     try {
       const res = await fetch(
@@ -49,7 +50,12 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id_token: response.credential }),
         }
-      );
+      ); 
+      if (!res.ok) {
+        const err = await res.text();
+        console.error("Backend error:", err);
+        throw new Error(err);
+      }
 
       const data: BackendResponse = await res.json();
 
@@ -57,14 +63,13 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
         const user = {
           ...data.user,
           Ten: data.user.ten,
-          role: data.user.vai_tro ? "admin" : "user",
+          role: data.user.vai_tro ? "admin" : "user",   // ✅ bạn đã có field này rồi
         };
       
         dispatch(login({ user, token: data.token }));
         localStorage.setItem("token", data.token);
         localStorage.setItem("user", JSON.stringify(user));
       
-        // Phân quyền khi login
         if (user.role === "admin") {
           navigate("/admin");
         } else {
@@ -73,7 +78,7 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
       
         onOpenChange(false);
       }
-       else {
+      else {
         alert("Đăng nhập thất bại");
       }
     } catch (err) {
@@ -97,6 +102,7 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 
         const script = document.createElement("script");
         script.src = "https://accounts.google.com/gsi/client";
+        script.crossOrigin = "anonymous";
         script.id = "google-client-script";
         script.async = true;
         script.defer = true;
@@ -112,6 +118,8 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
       window.google.accounts.id.initialize({
         client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID as string,
         callback: handleCredentialResponse,
+        ux_mode: "popup",
+
       });
 
       window.google.accounts.id.renderButton(googleButtonRef.current, {

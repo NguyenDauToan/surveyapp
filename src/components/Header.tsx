@@ -45,7 +45,12 @@ const Header = () => {
           >
             Khảo sát của tôi
           </Link>
-
+          <Link
+            to="/rooms"
+            className="text-sm font-medium text-foreground/80 hover:text-foreground transition-colors"
+          >
+            Phòng
+          </Link>
         </nav>
 
         <div className="flex items-center space-x-4">

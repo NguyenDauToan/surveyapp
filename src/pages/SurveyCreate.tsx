@@ -13,6 +13,7 @@ import Header from "@/components/Header";
 import { toast } from "sonner";
 import { createSurveyAPI, addQuestionAPI } from "@/api/Api";
 
+
 interface Question {
   id: string;
   type: 'text' | 'multiple-choice' | 'rating' | 'yes-no';
@@ -33,6 +34,8 @@ const SurveyCreate = () => {
     description: "",
     questions: []
   });
+  const [surveyLink, setSurveyLink] = useState<string | null>(null);
+
   const [maxResponses, setMaxResponses] = useState<number | null>(null);
   const [isLimited, setIsLimited] = useState(false); // Có bật giới hạn hay không
   const [showPreview, setShowPreview] = useState(false);
@@ -111,12 +114,17 @@ const SurveyCreate = () => {
         const payload = {
           type: q.type.toUpperCase(),
           content: q.title,
-          props: { required: q.required, options: q.options || [] } // JSON object
+          props: { required: q.required, options: q.options || [] }
         };
         await addQuestionAPI(formId, payload, token);
       }
 
       toast.success("Đã lưu khảo sát và câu hỏi vào database!");
+
+      // Tạo link khảo sát
+      const link = `${window.location.origin}/survey/${formId}`;
+      setSurveyLink(link);
+
     } catch (err: any) {
       toast.error(err.message || "Lỗi khi lưu khảo sát");
     }
@@ -407,7 +415,30 @@ const SurveyCreate = () => {
                 </div>
               </DialogContent>
             </Dialog>
-
+            {surveyLink && (
+              <div className="mt-4 p-4 border rounded bg-green-50 text-green-700 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <p className="flex-1">
+                  Khảo sát đã tạo thành công! Nhấn nút để sao chép link:
+                </p>
+                <div className="flex gap-2 items-center">
+                  <input
+                    type="text"
+                    readOnly
+                    value={surveyLink}
+                    className="border px-2 py-1 rounded w-64 text-sm"
+                  />
+                  <button
+                    className="bg-primary text-white px-3 py-1 rounded hover:bg-primary/80 transition"
+                    onClick={() => {
+                      navigator.clipboard.writeText(surveyLink);
+                      toast.success("Đã sao chép link vào clipboard!");
+                    }}
+                  >
+                    Sao chép
+                  </button>
+                </div>
+              </div>
+            )}
             <Button onClick={saveSurvey}>
               <Save className="h-4 w-4 mr-2" />
               Lưu khảo sát

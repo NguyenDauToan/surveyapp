@@ -1,11 +1,11 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Plus, 
-  Type, 
-  CheckSquare, 
-  Circle, 
+import {
+  Plus,
+  Type,
+  CheckSquare,
+  Circle,
   Star,
   Calendar,
   FileText,
@@ -13,6 +13,7 @@ import {
   BarChart3,
   Eye
 } from "lucide-react";
+import { Link } from "react-router-dom";
 
 const SurveyBuilder = () => {
   const questionTypes = [
@@ -38,7 +39,7 @@ const SurveyBuilder = () => {
                 Thiết kế khảo sát <span className="text-primary">dễ dàng</span>
               </h2>
               <p className="text-lg text-muted-foreground">
-                Giao diện kéo thả trực quan, thêm câu hỏi chỉ với một cú click. 
+                Giao diện kéo thả trực quan, thêm câu hỏi chỉ với một cú click.
                 Tùy chỉnh giao diện, logic câu hỏi và phân nhánh thông minh.
               </p>
             </div>
@@ -59,10 +60,12 @@ const SurveyBuilder = () => {
             </div>
 
             <div className="flex flex-col sm:flex-row gap-4">
-              <Button variant="hero" size="lg" className="group">
-                <Plus className="mr-2 h-5 w-5" />
-                Tạo khảo sát ngay
-              </Button>
+              <Link to="/create">
+                <Button variant="hero" size="lg" className="group">
+                  <Plus className="mr-2 h-5 w-5" />
+                  Tạo khảo sát ngay
+                </Button>
+              </Link>
               <Button variant="outline" size="lg">
                 <Eye className="mr-2 h-5 w-5" />
                 Xem mẫu khảo sát
