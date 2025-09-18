@@ -63,12 +63,17 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
         const user = {
           ...data.user,
           Ten: data.user.ten,
-          role: data.user.vai_tro ? "admin" : "user",   // ✅ bạn đã có field này rồi
+          role: data.user.vai_tro ? "admin" : "user",
         };
       
         dispatch(login({ user, token: data.token }));
+      
+        // ✅ Lưu token và user
         localStorage.setItem("token", data.token);
         localStorage.setItem("user", JSON.stringify(user));
+      
+        // ✅ Lưu user_id riêng dưới dạng string
+        localStorage.setItem("user_id", String(data.user.id));
       
         if (user.role === "admin") {
           navigate("/admin");

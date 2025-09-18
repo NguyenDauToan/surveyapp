@@ -1,8 +1,7 @@
-// src/global.d.ts
 export {};
 
 declare global {
   interface Window {
-    google: any;
+    google?: any; // ✅ dấu ? nếu có thể chưa load script
   }
 }

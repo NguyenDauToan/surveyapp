@@ -7,16 +7,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Plus, Trash2, Eye, Save, Type, List, Star, ToggleLeft } from "lucide-react";
 import Header from "@/components/Header";
 import { toast } from "sonner";
 import { createSurveyAPI, addQuestionAPI } from "@/api/Api";
 
-
 interface Question {
   id: string;
-  type: 'text' | 'multiple-choice' | 'rating' | 'yes-no';
+  type: "text" | "multiple-choice" | "rating" | "yes-no";
   title: string;
   required: boolean;
   options?: string[];
@@ -32,29 +30,36 @@ const SurveyCreate = () => {
   const [survey, setSurvey] = useState<Survey>({
     title: "",
     description: "",
-    questions: []
+    questions: [],
   });
   const [surveyLink, setSurveyLink] = useState<string | null>(null);
 
   const [maxResponses, setMaxResponses] = useState<number | null>(null);
-  const [isLimited, setIsLimited] = useState(false); // Có bật giới hạn hay không
+  const [isLimited, setIsLimited] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [newQuestion, setNewQuestion] = useState<Partial<Question>>({
-    type: 'text',
-    title: '',
+    type: "text",
+    title: "",
     required: false,
-    options: []
+    options: [],
   });
 
-  const form = useForm<Survey>({
-    defaultValues: survey
+  // ================== SETTINGS ==================
+  const [settings, setSettings] = useState({
+    max_responses: null as number | null,
+    collect_email: false,
+    show_progress: false,
+    shuffle_questions: false,
+    start_at: null as string | null,
+    expire_at: null as string | null,
+    language: "vi",
   });
 
   const questionTypes = [
-    { value: 'text', label: 'Câu hỏi mở', icon: Type },
-    { value: 'multiple-choice', label: 'Trắc nghiệm', icon: List },
-    { value: 'rating', label: 'Đánh giá sao', icon: Star },
-    { value: 'yes-no', label: 'Có/Không', icon: ToggleLeft }
+    { value: "text", label: "Câu hỏi mở", icon: Type },
+    { value: "multiple-choice", label: "Trắc nghiệm", icon: List },
+    { value: "rating", label: "Đánh giá sao", icon: Star },
+    { value: "yes-no", label: "Có/Không", icon: ToggleLeft },
   ];
 
   const addQuestion = () => {
@@ -62,156 +67,230 @@ const SurveyCreate = () => {
       toast.error("Vui lòng nhập tiêu đề câu hỏi");
       return;
     }
-
     const question: Question = {
       id: Date.now().toString(),
-      type: newQuestion.type as Question['type'],
+      type: newQuestion.type as Question["type"],
       title: newQuestion.title,
       required: newQuestion.required || false,
-      options: newQuestion.type === 'multiple-choice' ? newQuestion.options || [] : undefined
+      options: newQuestion.type === "multiple-choice" ? newQuestion.options || [] : undefined,
     };
-
-    setSurvey(prev => ({
+    setSurvey((prev) => ({
       ...prev,
-      questions: [...prev.questions, question]
+      questions: [...prev.questions, question],
     }));
-
-    setNewQuestion({
-      type: 'text',
-      title: '',
-      required: false,
-      options: []
-    });
-
+    setNewQuestion({ type: "text", title: "", required: false, options: [] });
     toast.success("Đã thêm câu hỏi thành công!");
   };
 
   const removeQuestion = (id: string) => {
-    setSurvey(prev => ({
+    setSurvey((prev) => ({
       ...prev,
-      questions: prev.questions.filter(q => q.id !== id)
+      questions: prev.questions.filter((q) => q.id !== id),
     }));
     toast.success("Đã xóa câu hỏi!");
+  };
+
+  const mapType = (type: string) => {
+    switch (type) {
+      case "text":
+        return "fill_blank";
+      case "multiple-choice":
+        return "multiple_choice";
+      case "rating":
+        return "rating";
+      case "yes-no":
+        return "true_false";
+      default:
+        return "fill_blank";
+    }
   };
 
   const saveSurvey = async () => {
     if (!survey.title) return toast.error("Nhập tiêu đề");
     if (survey.questions.length === 0) return toast.error("Chưa có câu hỏi");
-
-    const token = localStorage.getItem("token");
-    if (!token) return toast.error("Cần đăng nhập");
-
+  
+    const rawToken = localStorage.getItem("token");
+    const token = rawToken && rawToken !== "null" && rawToken !== "undefined" ? rawToken : undefined;  
     try {
-      const newSurvey = await createSurveyAPI(token, {
+      // ===== Tạo khảo sát =====
+      const newSurvey = await createSurveyAPI(token || "", {
         title: survey.title,
         description: survey.description,
         is_active: true,
+        settings: {
+          ...settings,
+          max_responses: isLimited ? maxResponses : null,
+        },
       });
+  
       const formId = newSurvey.ID || newSurvey.id;
       if (!formId) throw new Error("Không lấy được ID khảo sát");
-
+  
+      console.log("📌 Survey created:", newSurvey);
+      console.log("📌 formId gửi lên:", formId);
+  
+      // ✅ Nếu không login thì phải dùng edit_token
+      const editToken = !token ? newSurvey.edit_token : undefined;
+  
+      // ===== Thêm câu hỏi =====
       for (const q of survey.questions) {
         const payload = {
-          type: q.type.toUpperCase(),
+          type: mapType(q.type),
           content: q.title,
-          props: { required: q.required, options: q.options || [] }
+          props: JSON.stringify({
+            required: q.required,
+            options: q.options || [],
+          }),
         };
-        await addQuestionAPI(formId, payload, token);
+  
+        try {
+          console.log("➡️ Add question:", payload);
+  
+          await addQuestionAPI(formId, payload, token, !token ? editToken : undefined);
+  
+          console.log(`✅ Added question: ${q.title}`);
+        } catch (err: any) {
+          console.error("❌ Add question error:", {
+            question: q.title,
+            status: err.status,
+            data: err.data,
+            message: err.message,
+          });
+          toast.error(
+            `Lỗi khi thêm câu hỏi "${q.title}": ${
+              err.data?.message || err.message
+            }`
+          );
+          return; // ❌ dừng nếu có lỗi
+        }
       }
-
-      toast.success("Đã lưu khảo sát và câu hỏi vào database!");
-
-      // Tạo link khảo sát
-      const link = `${window.location.origin}/survey/${formId}`;
-      setSurveyLink(link);
-
+  
+      toast.success("🎉 Đã lưu khảo sát và câu hỏi vào database!");
+      setSurveyLink(`${window.location.origin}/survey/${formId}`);
     } catch (err: any) {
-      toast.error(err.message || "Lỗi khi lưu khảo sát");
+      console.error("❌ Save survey error:", {
+        status: err.status,
+        data: err.data,
+        message: err.message,
+      });
+      toast.error(err.data?.message || err.message || "Lỗi khi lưu khảo sát");
     }
   };
+  
+  
+  
 
   const addOption = () => {
-    if (newQuestion.type === 'multiple-choice') {
-      setNewQuestion(prev => ({
+    if (newQuestion.type === "multiple-choice") {
+      setNewQuestion((prev) => ({
         ...prev,
-        options: [...(prev.options || []), '']
+        options: [...(prev.options || []), ""],
       }));
     }
   };
 
   const updateOption = (index: number, value: string) => {
-    setNewQuestion(prev => ({
+    setNewQuestion((prev) => ({
       ...prev,
-      options: prev.options?.map((opt, i) => i === index ? value : opt)
+      options: prev.options?.map((opt, i) => (i === index ? value : opt)),
     }));
   };
 
   const removeOption = (index: number) => {
-    setNewQuestion(prev => ({
+    setNewQuestion((prev) => ({
       ...prev,
-      options: prev.options?.filter((_, i) => i !== index)
+      options: prev.options?.filter((_, i) => i !== index),
     }));
   };
-
+  
   return (
     <div className="min-h-screen bg-background">
       <Header />
-
       <main className="container max-w-4xl mx-auto py-8 px-4">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground mb-2">Tạo khảo sát mới</h1>
+          <h1 className="text-3xl font-bold mb-2">Tạo khảo sát mới</h1>
           <p className="text-muted-foreground">Thiết kế khảo sát của bạn với các câu hỏi đa dạng</p>
         </div>
 
         <div className="grid gap-6">
-          {/* Survey Basic Info */}
+          {/* Info */}
           <Card>
             <CardHeader>
               <CardTitle>Thông tin cơ bản</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <Label htmlFor="title">Tiêu đề khảo sát</Label>
-                <Input
-                  id="title"
-                  placeholder="Nhập tiêu đề khảo sát..."
-                  value={survey.title}
-                  onChange={(e) => setSurvey(prev => ({ ...prev, title: e.target.value }))}
-                />
+                <Label>Tiêu đề khảo sát</Label>
+                <Input value={survey.title} onChange={e => setSurvey({ ...survey, title: e.target.value })} />
               </div>
               <div>
-                <Label htmlFor="description">Mô tả</Label>
-                <Textarea
-                  id="description"
-                  placeholder="Mô tả ngắn về mục đích khảo sát..."
-                  value={survey.description}
-                  onChange={(e) => setSurvey(prev => ({ ...prev, description: e.target.value }))}
-                />
+                <Label>Mô tả</Label>
+                <Textarea value={survey.description} onChange={e => setSurvey({ ...survey, description: e.target.value })} />
               </div>
+
               <div className="flex items-center gap-2 mt-2">
                 <input
                   type="checkbox"
-                  id="limitResponses"
                   checked={isLimited}
-                  onChange={(e) => {
+                  onChange={e => {
                     setIsLimited(e.target.checked);
-                    if (!e.target.checked) setMaxResponses(null);
+                    if (!e.target.checked) setSettings(prev => ({ ...prev, max_responses: null }));
                   }}
                 />
-                <Label htmlFor="limitResponses">Giới hạn số lần trả lời</Label>
+                <Label>Giới hạn số lần trả lời</Label>
               </div>
-
               {isLimited && (
-                <div className="mt-2">
-                  <Input
-                    type="number"
-                    min={1}
-                    placeholder="Nhập số lần trả lời tối đa"
-                    value={maxResponses || ''}
-                    onChange={(e) => setMaxResponses(Number(e.target.value))}
-                  />
-                </div>
+                <Input
+                  type="number"
+                  min={1}
+                  placeholder="Nhập số lần trả lời tối đa"
+                  value={settings.max_responses || ""}
+                  onChange={e => setSettings(prev => ({ ...prev, max_responses: Number(e.target.value) }))}
+                />
               )}
+            </CardContent>
+          </Card>
+
+          {/* Settings */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Cài đặt nâng cao</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={settings.collect_email}
+                  onChange={e => setSettings(prev => ({ ...prev, collect_email: e.target.checked }))}
+                />
+                Thu thập email người trả lời
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={settings.show_progress}
+                  onChange={e => setSettings(prev => ({ ...prev, show_progress: e.target.checked }))}
+                />
+                Hiển thị tiến độ khảo sát
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={settings.shuffle_questions}
+                  onChange={e => setSettings(prev => ({ ...prev, shuffle_questions: e.target.checked }))}
+                />
+                Xáo trộn thứ tự câu hỏi
+              </label>
+              <div>
+                <Label>Ngôn ngữ</Label>
+                <Select value={settings.language} onValueChange={v => setSettings(prev => ({ ...prev, language: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="vi">Tiếng Việt</SelectItem>
+                    <SelectItem value="en">English</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </CardContent>
           </Card>
 
@@ -416,22 +495,15 @@ const SurveyCreate = () => {
               </DialogContent>
             </Dialog>
             {surveyLink && (
-              <div className="mt-4 p-4 border rounded bg-green-50 text-green-700 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                <p className="flex-1">
-                  Khảo sát đã tạo thành công! Nhấn nút để sao chép link:
-                </p>
+              <div className="p-4 border rounded bg-green-50 text-green-700 flex flex-col sm:flex-row gap-2">
+                <p className="flex-1">Khảo sát đã tạo thành công!</p>
                 <div className="flex gap-2 items-center">
-                  <input
-                    type="text"
-                    readOnly
-                    value={surveyLink}
-                    className="border px-2 py-1 rounded w-64 text-sm"
-                  />
+                  <input readOnly value={surveyLink} className="border px-2 py-1 rounded w-64 text-sm" />
                   <button
-                    className="bg-primary text-white px-3 py-1 rounded hover:bg-primary/80 transition"
+                    className="bg-primary text-white px-3 py-1 rounded"
                     onClick={() => {
                       navigator.clipboard.writeText(surveyLink);
-                      toast.success("Đã sao chép link vào clipboard!");
+                      toast.success("Đã sao chép link!");
                     }}
                   >
                     Sao chép

@@ -2,14 +2,22 @@ import { Button } from "@/components/ui/button";
 import { Menu, X, LogOut } from "lucide-react";
 import { useState } from "react";
 import LoginDialog from "@/layout/LoginDialog";
+import MySurveys from "@/pages/MySurveys"; // 👈 import MySurveys
 import { useSelector, useDispatch } from "react-redux";
 import { RootState } from "@/redux/store";
 import { logout } from "@/redux/authSlice";
 import { Link } from "react-router-dom";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
+  const [isMySurveyOpen, setIsMySurveyOpen] = useState(false); // 👈 thêm state
 
   const dispatch = useDispatch();
   const { user } = useSelector((state: RootState) => state.auth);
@@ -39,12 +47,13 @@ const Header = () => {
           >
             Tạo khảo sát
           </Link>
-          <Link
-            to="/my-surveys"
+          {/* 👇 sửa thành Button mở dialog */}
+          <button
+            onClick={() => setIsMySurveyOpen(true)}
             className="text-sm font-medium text-foreground/80 hover:text-foreground transition-colors"
           >
             Khảo sát của tôi
-          </Link>
+          </button>
           <Link
             to="/rooms"
             className="text-sm font-medium text-foreground/80 hover:text-foreground transition-colors"
@@ -94,7 +103,18 @@ const Header = () => {
         </div>
       </div>
 
+      {/* Dialog login */}
       <LoginDialog open={isLoginOpen} onOpenChange={setIsLoginOpen} />
+
+      {/* Dialog MySurveys */}
+      <Dialog open={isMySurveyOpen} onOpenChange={setIsMySurveyOpen}>
+        <DialogContent className="max-w-3xl h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Khảo sát của tôi</DialogTitle>
+          </DialogHeader>
+          <MySurveys /> {/* 👈 hiển thị luôn component MySurveys */}
+        </DialogContent>
+      </Dialog>
 
       {/* Mobile Navigation */}
       {isMenuOpen && (
@@ -106,13 +126,16 @@ const Header = () => {
             >
               Tạo khảo sát
             </Link>
-            <Link
-              to="/my-surveys"
+            {/* Mobile cũng mở dialog luôn */}
+            <button
+              onClick={() => {
+                setIsMenuOpen(false);
+                setIsMySurveyOpen(true);
+              }}
               className="text-sm font-medium text-foreground/80 hover:text-foreground transition-colors"
             >
               Khảo sát của tôi
-            </Link>
-
+            </button>
 
             <div className="pt-2 space-y-2">
               {!user ? (

@@ -70,19 +70,37 @@ export const createSurveyAPI = async (token: string, payload: any) => {
   return res.json();
 };
 
-export const addQuestionAPI = async (formId: number | string, payload: any, token: string) => {
-  const res = await axios.post(
-    `https://survey-server-m884.onrender.com/api/forms/${formId}/questions`,
-    payload,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,  // <--- cần có "Bearer "
-        "Content-Type": "application/json"
-      }
-    }
-  );
-  return res.data;
+export const addQuestionAPI = async (
+  formId: number,
+  payload: any,
+  token?: string,
+  editToken?: string
+) => {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  } else if (editToken) {
+    headers["X-Edit-Token"] = editToken; // ✅ Gửi kèm edit_token qua header
+  }
+
+  const res = await fetch(`${API_BASE}/forms/${formId}/questions`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const err = await res.json();
+    throw { status: res.status, data: err, message: err.message };
+  }
+
+  return res.json();
 };
+
+
 
 export const getQuestions = (formId: number, token: string) =>
   axiosClient
@@ -105,10 +123,10 @@ export const getLobbyRooms = async () => {
   }
   return res.json(); // backend trả danh sách room public
 };
+
 export const createRoomAPI = async (
   khaoSatID: number,
   tenRoom: string,
-  isPublic: boolean,
   token: string,
   moTa?: string
 ) => {
@@ -122,7 +140,6 @@ export const createRoomAPI = async (
       khao_sat_id: khaoSatID,
       ten_room: tenRoom,
       mo_ta: moTa,
-      is_public: isPublic,
     }),
   });
 
@@ -131,7 +148,7 @@ export const createRoomAPI = async (
     throw new Error(err.message || "Không thể tạo phòng");
   }
 
-  return res.json(); // { room_id: number }
+  return res.json(); // { data: room }
 };
 // =================== ADMIN ===================
 export const getAllUsers = async (token: string) => {
@@ -149,18 +166,48 @@ export const getAllUsers = async (token: string) => {
 
   return res.json(); // { users: [...] }
 };
-// getLobbyRooms → đổi thành getMyRooms
-export const getMyRooms = async (token: string) => {
-  const res = await fetch(`${API_BASE}/rooms/my`, {
+// =================== ROOM ===================
+export const getMyRooms = async (token: string, userId: string, page = 1, limit = 10, search = "") => {
+  const res = await fetch(`${API_BASE}/rooms`, {
+    headers: { Authorization: `Bearer ${token}` },
+    method: "GET",
+    // gửi params theo query string
+    body: null,
+  });
+  const url = new URL(`${API_BASE}/rooms`);
+  url.searchParams.append("owner_id", userId);
+  url.searchParams.append("page", page.toString());
+  url.searchParams.append("limit", limit.toString());
+  if (search) url.searchParams.append("search", search);
+
+  const response = await fetch(url.toString(), {
     headers: { Authorization: `Bearer ${token}` },
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ message: res.statusText }));
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ message: response.statusText }));
     throw new Error(err.message || "Không thể lấy danh sách phòng của bạn");
   }
-  return res.json(); // backend trả mảng room của user
+  return response.json(); // backend trả về { data: [...], total, page, limit }
 };
+// =================== ROOM DELETE ===================
+export const deleteRoomAPI = async (roomId: number, token: string) => {
+  if (!token) throw new Error("Bạn phải đăng nhập để xóa phòng");
 
+  const res = await fetch(`${API_BASE}/rooms/${roomId}`, {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ message: res.statusText }));
+    throw new Error(err.message || "Không thể xóa phòng");
+  }
+
+  return res.json(); // backend trả về { success: true } hoặc thông tin room
+};
 export const enterRoomAPI = async (roomId: number, password?: string, token?: string) => {
   const res = await fetch(`${API_BASE}/rooms/${roomId}/enter`, {
     method: "POST",
@@ -178,12 +225,76 @@ export const enterRoomAPI = async (roomId: number, password?: string, token?: st
 
   return res.json(); // { status, participant_id }
 };
-export const getMySurveys = async (token: string) => {
-  const res = await fetch(`${API_BASE}/forms/my`, {
+
+export const getFormDetail = async (id: number, token: string) => {
+  const res = await axiosClient.get(`/forms/${id}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  if (!res.ok) throw new Error("Không thể lấy khảo sát của bạn");
-  return res.json();
+  return res.data;
+};
+
+export const updateForm = async (id: number, body: any, token: string) => {
+  const res = await axiosClient.put(`/forms/${id}`, body, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return res.data;
+};
+// =================== SURVEY ===================
+export const getMySurveys = async (token: string) => {
+  const res = await axiosClient.get("/forms/my", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return res.data; // backend trả về mảng survey của user
+};
+
+export const deleteForm = async (id: number, token: string) => {
+  const res = await axiosClient.delete(`/forms/${id}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return res.data;
+};
+// =================== ROOM DETAIL ===================
+export const getRoomDetailAPI = async (roomId: number, token: string) => {
+  const res = await fetch(`${API_BASE}/rooms/${roomId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ message: res.statusText }));
+    throw new Error(err.message || "Không thể lấy chi tiết phòng");
+  }
+
+  return res.json(); // { id, ten_room, mo_ta, khao_sat, share_url, locked, members, ... }
+};
+
+// =================== ROOM UPDATE ===================
+export const updateRoomAPI = async (
+  roomId: number,
+  token: string,
+  payload: {
+    ten_room?: string;
+    mo_ta?: string;
+    khao_sat_id?: number;
+    is_public?: boolean;
+    khoa?: boolean;
+    mat_khau?: string;
+  }
+) => {
+  const res = await fetch(`${API_BASE}/rooms/${roomId}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ message: res.statusText }));
+    throw new Error(err.message || "Không thể cập nhật phòng");
+  }
+
+  return res.json(); // { success: true, room: {...} }
 };
 
 export default axiosClient;
