@@ -55,6 +55,9 @@ export interface Question {
 }
 
 export const createSurveyAPI = async (token: string, payload: any) => {
+  console.log("📌 [API] createSurvey payload:", payload);
+  console.log("📌 [API] token:", token);
+
   const res = await fetch(`${API_BASE}/forms`, {
     method: "POST",
     headers: {
@@ -63,12 +66,20 @@ export const createSurveyAPI = async (token: string, payload: any) => {
     },
     body: JSON.stringify(payload),
   });
+
+  console.log("📌 [API] createSurvey response status:", res.status);
+
   if (!res.ok) {
     const err = await res.json();
+    console.error("❌ [API] createSurvey error response:", err);
     throw new Error(err.message || "Không thể tạo khảo sát");
   }
-  return res.json();
+
+  const data = await res.json();
+  console.log("✅ [API] createSurvey success:", data);
+  return data;
 };
+
 
 export const addQuestionAPI = async (
   formId: number,
@@ -76,6 +87,9 @@ export const addQuestionAPI = async (
   token?: string,
   editToken?: string
 ) => {
+  console.log("📌 [API] addQuestion payload:", payload);
+  console.log("📌 [API] formId:", formId, "token:", token, "editToken:", editToken);
+
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
@@ -83,21 +97,27 @@ export const addQuestionAPI = async (
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   } else if (editToken) {
-    headers["X-Edit-Token"] = editToken; // ✅ Gửi kèm edit_token qua header
+    headers["X-Form-Edit-Token"] = editToken;
   }
 
-  const res = await fetch(`${API_BASE}/forms/${formId}/questions`, {
+  const res = await fetch(`/api/forms/${formId}/questions`, {
     method: "POST",
     headers,
     body: JSON.stringify(payload),
   });
+  
+
+  console.log("📌 [API] addQuestion response status:", res.status);
 
   if (!res.ok) {
     const err = await res.json();
+    console.error("❌ [API] addQuestion error response:", err);
     throw { status: res.status, data: err, message: err.message };
   }
 
-  return res.json();
+  const data = await res.json();
+  console.log("✅ [API] addQuestion success:", data);
+  return data;
 };
 
 

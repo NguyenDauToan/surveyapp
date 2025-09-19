@@ -106,11 +106,17 @@ const SurveyCreate = () => {
   };
 
   const saveSurvey = async () => {
+    console.log("📌 [saveSurvey] Start saving survey");
+    console.log("📌 [saveSurvey] Survey state:", survey);
+    console.log("📌 [saveSurvey] Settings:", settings);
+
     if (!survey.title) return toast.error("Nhập tiêu đề");
     if (survey.questions.length === 0) return toast.error("Chưa có câu hỏi");
-  
+
     const rawToken = localStorage.getItem("token");
-    const token = rawToken && rawToken !== "null" && rawToken !== "undefined" ? rawToken : undefined;  
+    const token = rawToken && rawToken !== "null" && rawToken !== "undefined" ? rawToken : undefined;
+    console.log("📌 [saveSurvey] Token:", token);
+
     try {
       // ===== Tạo khảo sát =====
       const newSurvey = await createSurveyAPI(token || "", {
@@ -122,16 +128,17 @@ const SurveyCreate = () => {
           max_responses: isLimited ? maxResponses : null,
         },
       });
-  
+
       const formId = newSurvey.ID || newSurvey.id;
       if (!formId) throw new Error("Không lấy được ID khảo sát");
-  
-      console.log("📌 Survey created:", newSurvey);
-      console.log("📌 formId gửi lên:", formId);
-  
-      // ✅ Nếu không login thì phải dùng edit_token
-      const editToken = !token ? newSurvey.edit_token : undefined;
-  
+
+      console.log("✅ [saveSurvey] Survey created:", newSurvey);
+      console.log("📌 [saveSurvey] formId gửi lên:", formId);
+
+      // Luôn lấy edit_token từ response để gửi khi thêm câu hỏi
+      const editToken = newSurvey.edit_token;
+      console.log("📌 [saveSurvey] editToken:", editToken);
+
       // ===== Thêm câu hỏi =====
       for (const q of survey.questions) {
         const payload = {
@@ -142,33 +149,35 @@ const SurveyCreate = () => {
             options: q.options || [],
           }),
         };
-  
+
         try {
-          console.log("➡️ Add question:", payload);
-  
-          await addQuestionAPI(formId, payload, token, !token ? editToken : undefined);
-  
-          console.log(`✅ Added question: ${q.title}`);
+          console.log("➡️ [saveSurvey] Add question payload:", payload);
+
+          // Nếu survey mới tạo mà owner_id chưa có → dùng editToken
+          const useEditToken = !token || !newSurvey.owner_id ? newSurvey.edit_token : undefined;
+
+          const addedQuestion = await addQuestionAPI(formId, payload, token && newSurvey.owner_id ? token : undefined, useEditToken);
+
+          console.log(`✅ [saveSurvey] Added question: ${q.title}`, addedQuestion);
         } catch (err: any) {
-          console.error("❌ Add question error:", {
+          console.error("❌ [saveSurvey] Add question error:", {
             question: q.title,
             status: err.status,
             data: err.data,
             message: err.message,
           });
-          toast.error(
-            `Lỗi khi thêm câu hỏi "${q.title}": ${
-              err.data?.message || err.message
-            }`
-          );
-          return; // ❌ dừng nếu có lỗi
+          toast.error(`Lỗi khi thêm câu hỏi "${q.title}": ${err.data?.message || err.message}`);
+          return; // dừng nếu có lỗi
         }
       }
-  
+
       toast.success("🎉 Đã lưu khảo sát và câu hỏi vào database!");
-      setSurveyLink(`${window.location.origin}/survey/${formId}`);
+      const link = `${window.location.origin}/survey/${formId}`;
+      setSurveyLink(link);
+      console.log("📌 [saveSurvey] Survey link:", link);
+
     } catch (err: any) {
-      console.error("❌ Save survey error:", {
+      console.error("❌ [saveSurvey] Save survey error:", {
         status: err.status,
         data: err.data,
         message: err.message,
@@ -176,9 +185,7 @@ const SurveyCreate = () => {
       toast.error(err.data?.message || err.message || "Lỗi khi lưu khảo sát");
     }
   };
-  
-  
-  
+
 
   const addOption = () => {
     if (newQuestion.type === "multiple-choice") {
@@ -202,7 +209,7 @@ const SurveyCreate = () => {
       options: prev.options?.filter((_, i) => i !== index),
     }));
   };
-  
+
   return (
     <div className="min-h-screen bg-background">
       <Header />

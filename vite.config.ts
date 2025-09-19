@@ -8,6 +8,14 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 5173,
+    proxy: {
+      // tất cả request bắt đầu bằng /api sẽ được chuyển tới backend
+      "/api": {
+        target: "https://survey-server-m884.onrender.com",
+        changeOrigin: true,
+        secure: false,
+      },
+    },
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
   resolve: {
