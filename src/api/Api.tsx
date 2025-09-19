@@ -316,5 +316,17 @@ export const updateRoomAPI = async (
 
   return res.json(); // { success: true, room: {...} }
 };
+export const setRoomPasswordAPI = async (roomId: number, token: string, password: string) => {
+  return axios.post(
+    `${API_BASE}/rooms/${roomId}/password`,
+    { password },
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+};
 
+export const removeRoomPasswordAPI = async (roomId: number, token: string) => {
+  return axios.delete(`${API_BASE}/rooms/${roomId}/password`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+};
 export default axiosClient;

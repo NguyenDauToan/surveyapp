@@ -8,10 +8,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Copy, Edit } from "lucide-react";
+import { Plus, Trash2, Copy, Edit, Users } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
-import { deleteRoomAPI, updateRoomAPI } from "@/api/Api";
+import { deleteRoomAPI, removeRoomPasswordAPI, setRoomPasswordAPI, updateRoomAPI } from "@/api/Api";
+import "../styles/Room.css"
+import { format } from "date-fns";
+import { vi } from "date-fns/locale";
+import Headerr from "@/components/Headerr";
 
 interface Room {
     id: number;
@@ -24,6 +28,7 @@ interface Room {
     is_public?: boolean;
     khoa?: boolean;
     mat_khau?: string;
+    members?: string[]; // 👈 thêm dòng này
 }
 
 const RoomPage = () => {
@@ -39,21 +44,33 @@ const RoomPage = () => {
     const API_BASE = "https://survey-server-m884.onrender.com/api";
 
     // ================= FETCH ROOMS =================
+    // ================= FETCH ROOMS =================
     const fetchRooms = async () => {
         if (!token) return;
         try {
+            // Lấy phòng của mình
             const resMy = await axios.get(`${API_BASE}/rooms`, {
                 headers: { Authorization: `Bearer ${token}` },
                 params: { page: 1, limit: 20 },
             });
-            setMyRooms(resMy.data.data);
+            setMyRooms(Array.isArray(resMy.data.data) ? resMy.data.data : []);
 
+            // Lấy phòng công khai
             const resPublic = await axios.get(`${API_BASE}/lobby`);
-            setPublicRooms(resPublic.data);
+            // đảm bảo publicRooms là array
+            const publicData = Array.isArray(resPublic.data)
+                ? resPublic.data
+                : Array.isArray(resPublic.data?.data)
+                    ? resPublic.data.data
+                    : [];
+            setPublicRooms(publicData);
         } catch (err: any) {
             toast.error(err.response?.data?.message || "Không lấy được danh sách phòng");
+            setMyRooms([]);
+            setPublicRooms([]);
         }
     };
+
 
     useEffect(() => {
         fetchRooms();
@@ -63,21 +80,27 @@ const RoomPage = () => {
     const handleCreateRoom = async () => {
         if (!token) return toast.error("Bạn phải đăng nhập mới tạo được phòng");
         if (!newRoom.ten_room.trim()) return toast.error("Tên phòng không được để trống");
-        if (newRoom.khoa && !newRoom.mat_khau.trim()) return toast.error("Phải nhập mật khẩu khi bật khoá");
 
         try {
-            await axios.post(
+            // Tạo room trước
+            const res = await axios.post(
                 `${API_BASE}/rooms`,
                 {
                     khao_sat_id: 1,
                     ten_room: newRoom.ten_room,
                     mo_ta: newRoom.mo_ta,
                     is_public: newRoom.is_public,
-                    khoa: newRoom.khoa,
-                    mat_khau: newRoom.khoa ? newRoom.mat_khau : undefined
                 },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
+
+            const roomId = res.data.data.id;
+
+            // Nếu chọn khóa + có mật khẩu thì set luôn
+            if (newRoom.khoa && newRoom.mat_khau.trim()) {
+                await setRoomPasswordAPI(roomId, token, newRoom.mat_khau);
+            }
+
             toast.success(`Phòng "${newRoom.ten_room}" đã tạo`);
             setNewRoom({ ten_room: "", mo_ta: "", is_public: true, khoa: false, mat_khau: "" });
             setShowCreateForm(false);
@@ -95,24 +118,30 @@ const RoomPage = () => {
 
     const handleUpdateRoom = async () => {
         if (!token || !editRoom) return;
-        if (editRoom.khoa && !editRoom.mat_khau?.trim()) return toast.error("Phải nhập mật khẩu khi bật khoá");
+
         try {
+            // 1. Update các field chung (trừ mật khẩu)
             await updateRoomAPI(editRoom.id, token, {
                 ten_room: editRoom.ten_room,
                 mo_ta: editRoom.mo_ta,
-                is_public: editRoom.is_public,
-                khoa: editRoom.khoa,
-                mat_khau: editRoom.khoa ? editRoom.mat_khau : undefined
+                is_public: editRoom.is_public
             });
+
+            // 2. Xử lý mật khẩu
+            if (editRoom.khoa && editRoom.mat_khau?.trim()) {
+                await setRoomPasswordAPI(editRoom.id, token, editRoom.mat_khau);
+            } else if (!editRoom.khoa) {
+                await removeRoomPasswordAPI(editRoom.id, token);
+            }
+
             toast.success("Cập nhật phòng thành công");
             setEditRoom(null);
             setShowEditForm(false);
             fetchRooms();
         } catch (err: any) {
-            toast.error(err.message || "Không cập nhật được phòng");
+            toast.error(err.response?.data?.message || "Không cập nhật được phòng");
         }
     };
-
     // ================= DELETE ROOM =================
     const handleDeleteRoom = async (roomId: number) => {
         if (!token) return toast.error("Bạn phải đăng nhập mới xóa được phòng");
@@ -137,7 +166,7 @@ const RoomPage = () => {
     // ================= RENDER =================
     return (
         <div className="min-h-screen bg-background">
-            <Header />
+            <Headerr />
             <main className="container mx-auto px-4 py-8">
                 <div className="max-w-6xl mx-auto">
                     {/* HEADER */}
@@ -248,6 +277,7 @@ const RoomPage = () => {
                                     <Button onClick={handleUpdateRoom}>Cập nhật</Button>
                                     <Button variant="outline" onClick={() => setShowEditForm(false)}>Hủy</Button>
                                 </div>
+
                             </CardContent>
                         </Card>
                     )}
@@ -259,24 +289,77 @@ const RoomPage = () => {
                             const isOwner = Number(room.nguoi_tao_id) === Number(userId);
                             return (
                                 <Card key={room.id} className="hover:shadow-lg transition-shadow">
-                                    <CardHeader className="flex justify-between items-start">
-                                        <div>
-                                            <CardTitle>{room.ten_room}</CardTitle>
-                                            <CardDescription>{room.mo_ta}</CardDescription>
-                                        </div>
-                                        <div className="flex gap-1">
-                                            {isOwner && (
-                                                <>
-                                                    <Button onClick={() => openEditRoom(room)} variant="ghost" size="sm"><Edit className="h-4 w-4" /></Button>
-                                                    <Button onClick={() => handleDeleteRoom(room.id)} variant="ghost" size="sm" className="text-destructive"><Trash2 className="h-4 w-4" /></Button>
-                                                </>
-                                            )}
+                                    <CardHeader >
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <Badge
+                                                    className={`room-state ${room.is_public ? "bg-primary text-white" : "bg-red-500 text-white"
+                                                        }`}
+                                                >
+                                                    {room.is_public ? "Công khai" : "Riêng tư"}
+                                                </Badge>
+
+                                                <CardTitle>{room.ten_room}</CardTitle>
+                                                <CardDescription>{room.mo_ta}</CardDescription>
+
+                                            </div>
+
+                                            <div className="flex gap-1">
+                                                {isOwner && (
+                                                    <>
+                                                        <Button onClick={() => openEditRoom(room)} variant="ghost" size="sm"><Edit className="h-4 w-4" /></Button>
+                                                        <Button onClick={() => handleDeleteRoom(room.id)} variant="ghost" size="sm" className="text-destructive"><Trash2 className="h-4 w-4" /></Button>
+                                                    </>
+                                                )}
+                                            </div>
+
                                         </div>
                                     </CardHeader>
-                                    <CardContent className="flex justify-between items-center">
-                                        <Badge variant="outline">{room.share_url}</Badge>
-                                        <Button onClick={() => copyInviteCode(room.share_url)} variant="ghost" size="sm"><Copy className="h-3 w-3" /></Button>
-                                    </CardContent>
+
+                                    {String(room.nguoi_tao_id) === String(userId) && (
+                                        <CardContent className="flex flex-col gap-3">
+                                            {/* Thành viên */}
+                                            <div>
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <Users className="h-4 w-4 text-muted-foreground" />
+                                                    <span className="text-sm font-medium">
+                                                        Thành viên ({room.members?.length ?? 0})
+                                                    </span>
+                                                </div>
+                                                <div className="flex flex-wrap gap-1">
+                                                    {(room.members ?? []).slice(0, 3).map((member, index) => (
+                                                        <Badge key={index} variant="secondary" className="text-xs">
+                                                            {member}
+                                                        </Badge>
+                                                    ))}
+                                                    {room.members && room.members.length > 3 && (
+                                                        <Badge variant="secondary" className="text-xs">
+                                                            +{room.members.length - 3} khác
+                                                        </Badge>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* URL + copy */}
+                                            <div className="flex justify-between items-center">
+                                                <Badge variant="outline">{room.share_url}</Badge>
+                                                <Button
+                                                    onClick={() => copyInviteCode(room.share_url!)}
+                                                    variant="ghost"
+                                                    size="sm"
+                                                >
+                                                    <Copy className="h-3 w-3" />
+                                                </Button>
+                                            </div>
+                                            <div className="text-xs text-muted-foreground pt-2 border-t">
+                                                Ngày tạo:{" "}
+                                                {room.ngay_tao
+                                                    ? format(new Date(room.ngay_tao), "dd/MM/yyyy HH:mm", { locale: vi })
+                                                    : "Không rõ"}
+                                            </div>
+                                        </CardContent>
+
+                                    )}
                                 </Card>
                             );
                         })}
@@ -284,26 +367,70 @@ const RoomPage = () => {
                     {/* PHÒNG CÔNG KHAI */}
                     <h2 className="text-2xl font-bold mt-8 mb-4">Phòng công khai</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {publicRooms.map(room => (
+                        {Array.isArray(publicRooms) && publicRooms.map(room => (
                             <Card key={room.id} className="hover:shadow-lg transition-shadow">
                                 <CardHeader className="flex justify-between items-start">
                                     <div>
+                                        <Badge
+                                            className={`room-state ${room.is_public ? "bg-primary text-white" : "bg-red-500 text-white"
+                                                }`}
+                                        >
+                                            {room.is_public ? "Công khai" : "Riêng tư"}
+                                        </Badge>
+
                                         <CardTitle>{room.ten_room}</CardTitle>
                                         <CardDescription>{room.mo_ta}</CardDescription>
                                     </div>
-                                    <div className="flex gap-1">
-                                        {/* Nếu muốn hiện nút tham gia */}
-                                        <Button onClick={() => enterRoom(room.id)} variant="ghost" size="sm">
-                                            Tham gia
-                                        </Button>
-                                    </div>
+
                                 </CardHeader>
-                                <CardContent className="flex justify-between items-center">
-                                    <Badge variant="outline">{room.share_url}</Badge>
-                                    <Button onClick={() => copyInviteCode(room.share_url)} variant="ghost" size="sm">
-                                        <Copy className="h-3 w-3" />
-                                    </Button>
-                                </CardContent>
+                                {String(room.nguoi_tao_id) === String(userId) && (
+                                    <CardContent className="flex flex-col gap-3">
+                                        {/* Thành viên */}
+                                        <div>
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <Users className="h-4 w-4 text-muted-foreground" />
+                                                <span className="text-sm font-medium">
+                                                    Thành viên ({room.members?.length ?? 0})
+                                                </span>
+                                            </div>
+                                            <div className="flex flex-wrap gap-1">
+                                                {(room.members ?? []).slice(0, 3).map((member, index) => (
+                                                    <Badge key={index} variant="secondary" className="text-xs">
+                                                        {member}
+                                                    </Badge>
+                                                ))}
+                                                {room.members && room.members.length > 3 && (
+                                                    <Badge variant="secondary" className="text-xs">
+                                                        +{room.members.length - 3} khác
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* URL + copy */}
+                                        <div className="flex justify-between items-center">
+                                            <Badge variant="outline">{room.share_url}</Badge>
+                                            <Button
+                                                onClick={() => copyInviteCode(room.share_url!)}
+                                                variant="ghost"
+                                                size="sm"
+                                            >
+                                                <Copy className="h-3 w-3" />
+                                            </Button>
+                                        </div>
+                                        <div className="flex gap-1">
+                                            <Button onClick={() => enterRoom(room.id)} variant="ghost" size="sm">
+                                                Tham gia
+                                            </Button>
+                                        </div>
+                                        <div className="text-xs text-muted-foreground pt-2 border-t">
+                                            Ngày tạo:{" "}
+                                            {room.ngay_tao
+                                                ? format(new Date(room.ngay_tao), "dd/MM/yyyy HH:mm", { locale: vi })
+                                                : "Không rõ"}
+                                        </div>
+                                    </CardContent>
+                                )}
                             </Card>
                         ))}
                     </div>

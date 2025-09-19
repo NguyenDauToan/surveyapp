@@ -1,12 +1,14 @@
 import { Button } from "@/components/ui/button";
-import { Menu, X, LogOut } from "lucide-react";
+import { Menu, X, LogOut, Settings, Plus } from "lucide-react";
 import { useState } from "react";
 import LoginDialog from "@/layout/LoginDialog";
 import MySurveys from "@/pages/MySurveys"; // 👈 import MySurveys
 import { useSelector, useDispatch } from "react-redux";
 import { RootState } from "@/redux/store";
 import { logout } from "@/redux/authSlice";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import IndexPage from "./indexPage";
+import { Navigate } from "react-router-dom";
 import {
   Dialog,
   DialogContent,
@@ -18,9 +20,10 @@ const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [isMySurveyOpen, setIsMySurveyOpen] = useState(false); // 👈 thêm state
-
+  const [isIndexOpen, setIsIndexOpen] = useState(false)
   const dispatch = useDispatch();
   const { user } = useSelector((state: RootState) => state.auth);
+  const navigate = useNavigate();
 
   const handleLogout = () => {
     dispatch(logout());
@@ -54,6 +57,14 @@ const Header = () => {
           >
             Khảo sát của tôi
           </button>
+          <Button
+            onClick={() => {
+              setIsIndexOpen(true);
+              navigate("/page");
+            }}
+          >
+            Index
+          </Button>
           <Link
             to="/rooms"
             className="text-sm font-medium text-foreground/80 hover:text-foreground transition-colors"
@@ -163,7 +174,30 @@ const Header = () => {
             </div>
           </nav>
         </div>
-      )}  
+      )}
+      <header className="bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50 w-full border-b border-border/40">
+        <div className="container flex h-16 max-w-screen-xl items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
+              <span className="text-white font-bold text-sm">S</span>
+            </div>
+            <span className="font-bold text-xl text-foreground">SurveyPro</span>
+          </div>
+          
+          <div className="flex items-center space-x-4">
+            <Button variant="ghost" size="sm">
+              <Settings className="h-4 w-4 mr-2" />
+              Cài đặt
+            </Button>
+            <Button variant="hero" size="sm">
+              <Plus className="h-4 w-4 mr-2" />
+              Tạo khảo sát mới
+            </Button>
+          </div>
+          
+        </div>
+      </header>
+
     </header>
   );
 };

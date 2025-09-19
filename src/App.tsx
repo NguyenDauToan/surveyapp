@@ -14,6 +14,7 @@ import Room from "./pages/Room";
 // Admin
 import RequireAdmin from "./routes/RequireAdmin";
 import Admin from "./layout/admin/AdminLayout";
+import IndexPage from "./components/indexPage";
 
 const queryClient = new QueryClient();
 
@@ -29,6 +30,7 @@ const App = () => (
           <Route path="/my-surveys" element={<MySurveys />} />
           <Route path="/create" element={<SurveyCreate />} />
           <Route path="/rooms" element={<Room />} />
+          <Route path="/page" element={<IndexPage />} />
 
           {/* Admin routes */}
           <Route element={<RequireAdmin />}>

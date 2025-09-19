@@ -11,7 +11,7 @@ import { Plus, Trash2, Eye, Save, Type, List, Star, ToggleLeft } from "lucide-re
 import Header from "@/components/Header";
 import { toast } from "sonner";
 import { createSurveyAPI, addQuestionAPI } from "@/api/Api";
-
+import Headerr from "@/components/Headerr";
 interface Question {
   id: string;
   type: "text" | "multiple-choice" | "rating" | "yes-no";
@@ -212,7 +212,7 @@ const SurveyCreate = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header />
+      <Headerr />
       <main className="container max-w-4xl mx-auto py-8 px-4">
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">Tạo khảo sát mới</h1>

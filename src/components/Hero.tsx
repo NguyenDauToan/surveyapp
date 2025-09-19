@@ -1,105 +1,158 @@
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowRight, Play, BarChart3, Users, CheckCircle } from "lucide-react";
 import { Link } from "react-router-dom";
 import heroImage from "@/assets/survey-hero.jpg";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Plus, Settings, FileText, Clock } from "lucide-react";
+import { useState } from "react";
 
 const Hero = () => {
+
+  const [surveys] = useState([
+    { id: 1, title: "Khảo sát hài lòng khách hàng", responses: 45, status: "active", created: "2 ngày trước" },
+    { id: 2, title: "Đánh giá sản phẩm mới", responses: 23, status: "draft", created: "1 tuần trước" },
+    { id: 3, title: "Phản hồi nhân viên", responses: 67, status: "completed", created: "3 ngày trước" },
+  ]);
   return (
-    <section className="relative overflow-hidden bg-gradient-to-br from-background via-background to-secondary/30">
-      <div className="container mx-auto px-4 py-16 md:py-24">
-        <div className="grid lg:grid-cols-2 gap-12 items-center">
-          {/* Left Content */}
-          <div className="space-y-8">
-            <div className="space-y-4">
-              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-foreground leading-tight">
-                <span className="text-primary">Nền tảng</span> khảo sát{" "}
-                <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                  hiện đại
-                </span>
-              </h1>
-              <p className="text-xl text-muted-foreground max-w-lg">
-                Phần mềm tạo khảo sát trực tuyến miễn phí, giao diện đẹp, dễ sử dụng. 
-                Nền tảng nghiên cứu thị trường hoàn toàn tự động giúp tiết kiệm thời gian và chi phí.
-              </p>
-            </div>
+    <main className="container max-w-screen-xl mx-auto px-4 py-8">
+      {/* Quick Actions */}
+      <div className="mb-8">
 
-            <div className="flex flex-col sm:flex-row gap-4">
-              <Button variant="hero" size="xl" className="group">
-                Đăng ký miễn phí
-                <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
-              </Button>
-              <Button variant="outline" size="xl" className="group" asChild>
-                <Link to="/demo">
-                  <Play className="mr-2 h-5 w-5" />
-                  Xem demo
-                </Link>
-              </Button>
-            </div>
 
-            {/* Features */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 pt-8">
-              <div className="flex items-center space-x-3">
-                <div className="p-2 bg-primary/10 rounded-lg">
-                  <BarChart3 className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <p className="font-semibold text-sm">Phân tích thông minh</p>
-                  <p className="text-xs text-muted-foreground">Báo cáo tự động</p>
-                </div>
-              </div>
-              <div className="flex items-center space-x-3">
-                <div className="p-2 bg-primary/10 rounded-lg">
-                  <Users className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <p className="font-semibold text-sm">Không giới hạn</p>
-                  <p className="text-xs text-muted-foreground">Phản hồi khảo sát</p>
-                </div>
-              </div>
-              <div className="flex items-center space-x-3">
-                <div className="p-2 bg-primary/10 rounded-lg">
-                  <CheckCircle className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <p className="font-semibold text-sm">Dễ sử dụng</p>
-                  <p className="text-xs text-muted-foreground">Giao diện thân thiện</p>
-                </div>
-              </div>
-            </div>
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+          <Link to="/create" className="block">
+            <Card className="cursor-pointer hover:shadow-md transition-shadow">
+              <CardContent className="p-6 text-center">
+                <Plus className="h-8 w-8 mx-auto mb-2 text-primary" />
+                <p className="font-semibold">Tạo khảo sát</p>
+                <p className="text-sm text-muted-foreground">
+                  Bắt đầu tạo khảo sát mới
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+          <Link to="/rooms" className="block">
+            <Card className="cursor-pointer hover:shadow-md transition-shadow">
+              <CardContent className="p-6 text-center">
+                <Users className="h-8 w-8 mx-auto mb-2 text-primary" />
+                <h3 className="font-semibold">Phòng khảo sát</h3>
+                <p className="text-sm text-muted-foreground">Tạo và quản lý phòng</p>
+              </CardContent>
+            </Card>
+          </Link>
+          <Card className="cursor-pointer hover:shadow-md transition-shadow">
+            <CardContent className="p-6 text-center">
+              <BarChart3 className="h-8 w-8 mx-auto mb-2 text-primary" />
+              <h3 className="font-semibold">Xuất file PDF/EXCEL</h3>
+              <p className="text-sm text-muted-foreground">Xem báo cáo chi tiết</p>
+            </CardContent>
+          </Card>
 
-          {/* Right Content - Hero Image */}
-          <div className="relative">
-            <div className="relative z-10">
-              <img 
-                src={heroImage} 
-                alt="Nền tảng khảo sát trực tuyến hiện đại với giao diện đẹp và tính năng phân tích thông minh"
-                className="w-full h-auto rounded-2xl shadow-2xl"
-              />
-              
-              {/* Floating Cards */}
-              <Card className="absolute -top-4 -left-4 p-4 bg-card/90 backdrop-blur-sm border shadow-lg">
-                <div className="flex items-center space-x-3">
-                  <div className="h-3 w-3 bg-green-500 rounded-full animate-pulse"></div>
-                  <span className="text-sm font-medium">Đang hoạt động</span>
-                </div>
-              </Card>
-              
-              <Card className="absolute -bottom-4 -right-4 p-4 bg-card/90 backdrop-blur-sm border shadow-lg">
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-primary">2,847</p>
-                  <p className="text-xs text-muted-foreground">Phản hồi hôm nay</p>
-                </div>
-              </Card>
-            </div>
-
-            {/* Background decoration */}
-            <div className="absolute inset-0 bg-gradient-to-r from-primary/5 to-accent/5 rounded-2xl -m-4 -z-10"></div>
-          </div>
+          <Card className="cursor-pointer hover:shadow-md transition-shadow">
+            <CardContent className="p-6 text-center">
+              <FileText className="h-8 w-8 mx-auto mb-2 text-primary" />
+              <h3 className="font-semibold">Mẫu có sẵn</h3>
+              <p className="text-sm text-muted-foreground">Sử dụng mẫu khảo sát</p>
+            </CardContent>
+          </Card>
         </div>
       </div>
-    </section>
+
+      {/* Recent Surveys */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>Khảo sát gần đây</CardTitle>
+              <CardDescription>Quản lý các khảo sát của bạn</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {surveys.map((survey) => (
+                  <div key={survey.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors">
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-foreground">{survey.title}</h4>
+                      <div className="flex items-center space-x-4 mt-1">
+                        <span className="text-sm text-muted-foreground flex items-center">
+                          <Users className="h-4 w-4 mr-1" />
+                          {survey.responses} phản hồi
+                        </span>
+                        <span className="text-sm text-muted-foreground flex items-center">
+                          <Clock className="h-4 w-4 mr-1" />
+                          {survey.created}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Badge variant={survey.status === 'active' ? 'default' : survey.status === 'completed' ? 'secondary' : 'outline'}>
+                        {survey.status === 'active' ? 'Đang hoạt động' : survey.status === 'completed' ? 'Hoàn thành' : 'Nháp'}
+                      </Badge>
+                      <Button variant="ghost" size="sm">
+                        Xem
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-4 pt-4 border-t">
+                <Button variant="outline" className="w-full">
+                  Xem tất cả khảo sát
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Quick Create */}
+        <div>
+          <Card>
+            <CardHeader>
+              <CardTitle>Tạo nhanh</CardTitle>
+              <CardDescription>Tạo khảo sát đơn giản</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <label className="text-sm font-medium mb-2 block">Tiêu đề khảo sát</label>
+                <Input placeholder="Nhập tiêu đề..." />
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-2 block">Mô tả</label>
+                <Textarea placeholder="Mô tả ngắn gọn..." rows={3} />
+              </div>
+              <Button className="w-full">
+                <Plus className="h-4 w-4 mr-2" />
+                Tạo khảo sát
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle>Thống kê nhanh</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Tổng khảo sát</span>
+                  <span className="font-semibold">12</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Phản hồi hôm nay</span>
+                  <span className="font-semibold">24</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Đang hoạt động</span>
+                  <span className="font-semibold">5</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </main>
   );
 };
 
