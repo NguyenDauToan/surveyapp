@@ -15,7 +15,9 @@ import { deleteRoomAPI, removeRoomPasswordAPI, setRoomPasswordAPI, updateRoomAPI
 import "../styles/Room.css"
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
-import Headerr from "@/components/Headerr";
+import Headerr from "@/components/Header";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
+
 
 interface Room {
     id: number;
@@ -38,7 +40,7 @@ const RoomPage = () => {
     const [newRoom, setNewRoom] = useState({ ten_room: "", mo_ta: "", is_public: true, khoa: false, mat_khau: "" });
     const [editRoom, setEditRoom] = useState<Room | null>(null);
     const [showEditForm, setShowEditForm] = useState(false);
-
+    const [selectedRoom, setSelectedRoom] = useState<any | null>(null);
     const token = localStorage.getItem("token");
     const userId = localStorage.getItem("user_id") || "";
     const API_BASE = "https://survey-server-m884.onrender.com/api";
@@ -288,7 +290,7 @@ const RoomPage = () => {
                         {myRooms.map(room => {
                             const isOwner = Number(room.nguoi_tao_id) === Number(userId);
                             return (
-                                <Card key={room.id} className="hover:shadow-lg transition-shadow">
+                                <Card key={room.id} className="hover:shadow-lg transition-shadow" onClick={() => setSelectedRoom(room)}>
                                     <CardHeader >
                                         <div className="flex justify-between items-start">
                                             <div>
@@ -368,7 +370,7 @@ const RoomPage = () => {
                     <h2 className="text-2xl font-bold mt-8 mb-4">Phòng công khai</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {Array.isArray(publicRooms) && publicRooms.map(room => (
-                            <Card key={room.id} className="hover:shadow-lg transition-shadow">
+                            <Card key={room.id} className="hover:shadow-lg transition-shadow" >
                                 <CardHeader className="flex justify-between items-start">
                                     <div>
                                         <Badge
@@ -434,6 +436,120 @@ const RoomPage = () => {
                             </Card>
                         ))}
                     </div>
+                    {/* Dialog hiển thị chi tiết */}
+                    <Dialog open={!!selectedRoom} onOpenChange={() => setSelectedRoom(null)}>
+                        <DialogContent className="max-w-lg rounded-2xl shadow-xl p-6 bg-white">
+                            {selectedRoom && (
+                                <>
+                                    <DialogHeader className="border-b pb-4 mb-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="p-2 rounded-full bg-primary/10">
+                                                <Users className="h-6 w-6 text-primary" />
+                                            </div>
+                                            <div>
+                                                <DialogTitle className="text-xl font-semibold">
+                                                    {selectedRoom.ten_room}
+                                                </DialogTitle>
+                                                <DialogDescription className="text-sm text-muted-foreground">
+                                                    {selectedRoom.mo_ta || "Không có mô tả"}
+                                                </DialogDescription>
+                                            </div>
+                                        </div>
+                                    </DialogHeader>
+
+                                    <div className="space-y-5">
+                                        {/* Trạng thái */}
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-sm font-medium text-muted-foreground">Trạng thái</span>
+                                            <Badge
+                                                className={`px-3 py-1 rounded-full text-xs ${selectedRoom.is_public ? "bg-green-500 text-white" : "bg-red-500 text-white"
+                                                    }`}
+                                            >
+                                                {selectedRoom.is_public ? "Công khai" : "Riêng tư"}
+                                            </Badge>
+                                        </div>
+
+                                        {/* Thành viên */}
+                                        <div>
+                                            <div className="flex items-center justify-between mb-2">
+                                                <p className="text-sm font-medium text-muted-foreground">Thành viên</p>
+                                                {/* Nút thêm thành viên */}
+                                                <Dialog>
+                                                    <DialogTrigger asChild>
+                                                        <Button size="sm" variant="outline" className="text-xs">
+                                                            + Thêm
+                                                        </Button>
+                                                    </DialogTrigger>
+                                                    <DialogContent className="max-w-sm rounded-xl">
+                                                        <DialogHeader>
+                                                            <DialogTitle>Thêm thành viên</DialogTitle>
+                                                            <DialogDescription>
+                                                                Nhập email hoặc tên người dùng để mời tham gia phòng.
+                                                            </DialogDescription>
+                                                        </DialogHeader>
+                                                        <div className="flex gap-2">
+                                                            <Input
+                                                                placeholder="Nhập email hoặc username..."
+                                                            // onChange={(e) => setInviteValue(e.target.value)}
+                                                            />
+                                                            <Button
+                                                                onClick={() => {
+                                                                    // TODO: gọi API thêm thành viên ở đây
+                                                                    // addMember(selectedRoom.id, inviteValue)
+                                                                }}
+                                                            >
+                                                                Mời
+                                                            </Button>
+                                                        </div>
+                                                    </DialogContent>
+                                                </Dialog>
+                                            </div>
+
+                                            <div className="flex flex-wrap gap-2">
+                                                {(selectedRoom.members ?? []).slice(0, 5).map((m, i) => (
+                                                    <Badge key={i} variant="secondary" className="rounded-full px-3">
+                                                        {m}
+                                                    </Badge>
+                                                ))}
+                                                {selectedRoom.members && selectedRoom.members.length > 5 && (
+                                                    <Badge variant="secondary" className="rounded-full px-3">
+                                                        +{selectedRoom.members.length - 5} khác
+                                                    </Badge>
+                                                )}
+                                                {(!selectedRoom.members || selectedRoom.members.length === 0) && (
+                                                    <span className="text-sm text-muted-foreground">Chưa có</span>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Link chia sẻ */}
+                                        <div>
+                                            <p className="text-sm font-medium text-muted-foreground mb-2">Liên kết mời</p>
+                                            <div className="flex items-center justify-between rounded-lg border px-3 py-2 bg-muted/50">
+                                                <code className="text-sm truncate">{selectedRoom.share_url}</code>
+                                                <Button
+                                                    onClick={() => copyInviteCode(selectedRoom.share_url!)}
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="ml-2 hover:bg-primary/10"
+                                                >
+                                                    <Copy className="h-4 w-4 text-primary" />
+                                                </Button>
+                                            </div>
+                                        </div>
+
+                                        {/* Ngày tạo */}
+                                        <div className="text-xs text-muted-foreground pt-4 border-t">
+                                            Ngày tạo:{" "}
+                                            {selectedRoom.ngay_tao
+                                                ? format(new Date(selectedRoom.ngay_tao), "dd/MM/yyyy HH:mm", { locale: vi })
+                                                : "Không rõ"}
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                        </DialogContent>
+                    </Dialog>
 
                 </div>
             </main>

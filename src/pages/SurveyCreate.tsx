@@ -11,7 +11,7 @@ import { Plus, Trash2, Eye, Save, Type, List, Star, ToggleLeft } from "lucide-re
 import Header from "@/components/Header";
 import { toast } from "sonner";
 import { createSurveyAPI, addQuestionAPI } from "@/api/Api";
-import Headerr from "@/components/Headerr";
+import Headerr from "@/components/Header";
 interface Question {
   id: string;
   type: "text" | "multiple-choice" | "rating" | "yes-no";

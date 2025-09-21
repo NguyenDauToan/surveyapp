@@ -1,19 +1,13 @@
 import Header from "@/components/Header";
 import Hero from "@/components/Hero";
-import Features from "@/components/Features";
 import SurveyBuilder from "@/components/SurveyBuilder";
-import Customers from "@/components/Customers";
 import Footer from "@/components/Footer";
-import Headerr from "@/components/Headerr";
 const Index = () => {
   return (
     <div className="min-h-screen bg-background">
-      <Headerr />
+      <Header />
       <main>
         <Hero />
-        <Features />
-        <SurveyBuilder />
-        <Customers />
       </main>
       <Footer />
     </div>
