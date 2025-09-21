@@ -41,21 +41,7 @@ const Header = () => {
         </Link>
 
         {/* Desktop Nav */}
-        <nav className="hidden md:flex items-center gap-6">
-          <Link
-            to="/create"
-            className="text-sm font-medium text-foreground/80 hover:text-foreground transition-colors"
-          >
-            Tạo khảo sát
-          </Link>
-          <button
-            onClick={() => setIsMySurveyOpen(true)}
-            className="text-sm font-medium text-foreground/80 hover:text-foreground transition-colors"
-          >
-            Khảo sát của tôi
-          </button>
-          
-        </nav>
+        
 
         {/* Actions */}
         <div className="flex items-center gap-3">

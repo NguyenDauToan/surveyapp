@@ -329,4 +329,31 @@ export const removeRoomPasswordAPI = async (roomId: number, token: string) => {
     headers: { Authorization: `Bearer ${token}` },
   });
 };
+// Archive room
+export const archiveRoomAPI = async (roomId: number, token: string) => {
+  const res = await axios.put(
+    `${API_BASE}/rooms/${roomId}/archive`,
+    {},
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  return res.data;
+};
+// Lấy danh sách room đã lưu trữ
+export const getArchivedRoomsAPI = async (token: string) => {
+  const res = await axios.get(`${API_BASE}/rooms/archived`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return res.data;
+};
+
+// Khôi phục room
+export const restoreRoomAPI = async (roomId: number, token: string) => {
+  const res = await axios.put(
+    `${API_BASE}/rooms/${roomId}/restore`,
+    {},
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  return res.data;
+};
+
 export default axiosClient;

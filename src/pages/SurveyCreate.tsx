@@ -8,13 +8,14 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, Trash2, Eye, Save, Type, List, Star, ToggleLeft } from "lucide-react";
-import Header from "@/components/Header";
 import { toast } from "sonner";
 import { createSurveyAPI, addQuestionAPI } from "@/api/Api";
-import Headerr from "@/components/Header";
+import Header from "@/components/Header";
+import { Image } from "lucide-react"; // 🟢 icon hình ảnh
+
 interface Question {
   id: string;
-  type: "text" | "multiple-choice" | "rating" | "yes-no";
+  type: "text" | "multiple-choice" | "rating" | "yes-no" | "file-upload";
   title: string;
   required: boolean;
   options?: string[];
@@ -60,6 +61,7 @@ const SurveyCreate = () => {
     { value: "multiple-choice", label: "Trắc nghiệm", icon: List },
     { value: "rating", label: "Đánh giá sao", icon: Star },
     { value: "yes-no", label: "Có/Không", icon: ToggleLeft },
+    { value: "file-upload", label: "Tải ảnh lên", icon: Image }, // 🆕
   ];
 
   const addQuestion = () => {
@@ -73,6 +75,7 @@ const SurveyCreate = () => {
       title: newQuestion.title,
       required: newQuestion.required || false,
       options: newQuestion.type === "multiple-choice" ? newQuestion.options || [] : undefined,
+
     };
     setSurvey((prev) => ({
       ...prev,
@@ -100,6 +103,8 @@ const SurveyCreate = () => {
         return "rating";
       case "yes-no":
         return "true_false";
+      case "file-upload":
+        return "file_upload";
       default:
         return "fill_blank";
     }
@@ -212,7 +217,7 @@ const SurveyCreate = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <Headerr />
+      <Header />
       <main className="container max-w-4xl mx-auto py-8 px-4">
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">Tạo khảo sát mới</h1>
@@ -235,26 +240,8 @@ const SurveyCreate = () => {
                 <Textarea value={survey.description} onChange={e => setSurvey({ ...survey, description: e.target.value })} />
               </div>
 
-              <div className="flex items-center gap-2 mt-2">
-                <input
-                  type="checkbox"
-                  checked={isLimited}
-                  onChange={e => {
-                    setIsLimited(e.target.checked);
-                    if (!e.target.checked) setSettings(prev => ({ ...prev, max_responses: null }));
-                  }}
-                />
-                <Label>Giới hạn số lần trả lời</Label>
-              </div>
-              {isLimited && (
-                <Input
-                  type="number"
-                  min={1}
-                  placeholder="Nhập số lần trả lời tối đa"
-                  value={settings.max_responses || ""}
-                  onChange={e => setSettings(prev => ({ ...prev, max_responses: Number(e.target.value) }))}
-                />
-              )}
+
+
             </CardContent>
           </Card>
 
@@ -288,6 +275,28 @@ const SurveyCreate = () => {
                 />
                 Xáo trộn thứ tự câu hỏi
               </label>
+              <div className="flex items-center gap-2 mt-2">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={isLimited}
+                    onChange={e => {
+                      setIsLimited(e.target.checked);
+                      if (!e.target.checked) setSettings(prev => ({ ...prev, max_responses: null }));
+                    }}
+                  />
+                  Giới hạn số lần trả lời
+                </label>
+              </div>
+              {isLimited && (
+                <Input
+                  type="number"
+                  min={1}
+                  placeholder="Nhập số lần trả lời tối đa"
+                  value={settings.max_responses || ""}
+                  onChange={e => setSettings(prev => ({ ...prev, max_responses: Number(e.target.value) }))}
+                />
+              )}
               <div>
                 <Label>Ngôn ngữ</Label>
                 <Select value={settings.language} onValueChange={v => setSettings(prev => ({ ...prev, language: v }))}>
@@ -330,6 +339,17 @@ const SurveyCreate = () => {
                   </SelectContent>
                 </Select>
               </div>
+              {newQuestion.type === "file-upload" && (
+                <div>
+                  <Label>Người trả lời sẽ tải ảnh lên</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Chấp nhận file ảnh: JPG, PNG (tối đa 5MB)
+                  </p>
+                  {/* Khi tạo câu hỏi chỉ preview, không upload thật */}
+                  <Input type="file" accept="image/*" disabled />
+                </div>
+              )}
+
 
               <div>
                 <Label>Câu hỏi</Label>

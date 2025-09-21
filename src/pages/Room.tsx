@@ -2,22 +2,21 @@
 // RoomPage.tsx
 // ==============================
 import { useState, useEffect } from "react";
-import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Copy, Edit, Users } from "lucide-react";
+import { Plus, Trash2, Copy, Edit, Users, Archive } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
-import { deleteRoomAPI, removeRoomPasswordAPI, setRoomPasswordAPI, updateRoomAPI } from "@/api/Api";
+import { archiveRoomAPI, deleteRoomAPI, removeRoomPasswordAPI, setRoomPasswordAPI, updateRoomAPI } from "@/api/Api";
 import "../styles/Room.css"
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
-import Headerr from "@/components/Header";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
-
+import Header from "@/components/Header";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogClose } from "@/components/ui/dialog";
+import ArchivedRooms from "./ArchivedRooms";
 
 interface Room {
     id: number;
@@ -41,6 +40,7 @@ const RoomPage = () => {
     const [editRoom, setEditRoom] = useState<Room | null>(null);
     const [showEditForm, setShowEditForm] = useState(false);
     const [selectedRoom, setSelectedRoom] = useState<any | null>(null);
+    const [archiveDialogRoom, setArchiveDialogRoom] = useState<Room | null>(null);
     const token = localStorage.getItem("token");
     const userId = localStorage.getItem("user_id") || "";
     const API_BASE = "https://survey-server-m884.onrender.com/api";
@@ -55,23 +55,24 @@ const RoomPage = () => {
                 headers: { Authorization: `Bearer ${token}` },
                 params: { page: 1, limit: 20 },
             });
-            setMyRooms(Array.isArray(resMy.data.data) ? resMy.data.data : []);
+            const myData = Array.isArray(resMy.data.data) ? resMy.data.data : [];
+            setMyRooms(myData.filter((r: Room) => r.trang_thai !== "archived")); // 👈 bỏ phòng archived
 
             // Lấy phòng công khai
             const resPublic = await axios.get(`${API_BASE}/lobby`);
-            // đảm bảo publicRooms là array
             const publicData = Array.isArray(resPublic.data)
                 ? resPublic.data
                 : Array.isArray(resPublic.data?.data)
                     ? resPublic.data.data
                     : [];
-            setPublicRooms(publicData);
+            setPublicRooms(publicData.filter((r: Room) => r.trang_thai !== "archived")); // 👈 bỏ luôn
         } catch (err: any) {
             toast.error(err.response?.data?.message || "Không lấy được danh sách phòng");
             setMyRooms([]);
             setPublicRooms([]);
         }
     };
+
 
 
     useEffect(() => {
@@ -116,6 +117,8 @@ const RoomPage = () => {
     const openEditRoom = (room: Room) => {
         setEditRoom({ ...room, mat_khau: "" });
         setShowEditForm(true);
+        setSelectedRoom(null); // 👈 thêm dòng này
+
     };
 
     const handleUpdateRoom = async () => {
@@ -155,7 +158,18 @@ const RoomPage = () => {
             toast.error(err.message || "Không xóa được phòng");
         }
     };
+    // ================= ARCHIVE ROOM =================
+    const handleArchiveRoom = async (roomId: number) => {
+        if (!token) return toast.error("Bạn phải đăng nhập mới lưu trữ được phòng");
 
+        try {
+            await archiveRoomAPI(roomId, token);
+            toast.success("Phòng đã được lưu trữ");
+            fetchRooms();
+        } catch (err: any) {
+            toast.error(err.response?.data?.message || "Không lưu trữ được phòng");
+        }
+    };
     // ================= COPY & ENTER =================
     const copyInviteCode = (code: string) => {
         navigator.clipboard.writeText(code);
@@ -168,7 +182,7 @@ const RoomPage = () => {
     // ================= RENDER =================
     return (
         <div className="min-h-screen bg-background">
-            <Headerr />
+            <Header />
             <main className="container mx-auto px-4 py-8">
                 <div className="max-w-6xl mx-auto">
                     {/* HEADER */}
@@ -177,11 +191,29 @@ const RoomPage = () => {
                             <h1 className="text-3xl font-bold mb-2">Quản lý phòng</h1>
                             <p className="text-muted-foreground">Tạo và quản lý các phòng khảo sát của bạn</p>
                         </div>
-                        <Button onClick={() => setShowCreateForm(true)} className="flex items-center gap-2">
-                            <Plus className="h-4 w-4" /> Tạo phòng mới
-                        </Button>
-                    </div>
+                        <div className="flex gap-2">
+                            <Button onClick={() => setShowCreateForm(true)} className="flex items-center gap-2">
+                                <Plus className="h-4 w-4" /> Tạo phòng mới
+                            </Button>
+                            {/* Nút Phòng đã lưu trữ */}
+                            <Dialog>
+                                <DialogTrigger asChild>
+                                    <Button variant="outline">
+                                        <Archive className="h-4 w-4 mr-2" />
+                                        Phòng đã lưu trữ
+                                    </Button>
+                                </DialogTrigger>
+                                <DialogContent className="max-w-3xl">
+                                    <DialogHeader>
+                                        <DialogTitle>Phòng đã lưu trữ</DialogTitle>
+                                    </DialogHeader>
 
+                                    {/* Component hiển thị danh sách đã lưu trữ */}
+                                    <ArchivedRooms token={token || ""} />
+                                </DialogContent>
+                            </Dialog>
+                        </div>
+                    </div>
                     {/* CREATE FORM */}
                     {showCreateForm && (
                         <Card className="mb-8">
@@ -233,7 +265,6 @@ const RoomPage = () => {
                             </CardContent>
                         </Card>
                     )}
-
                     {/* EDIT FORM */}
                     {showEditForm && editRoom && (
                         <Card className="mb-8">
@@ -277,115 +308,151 @@ const RoomPage = () => {
                                 )}
                                 <div className="flex gap-2">
                                     <Button onClick={handleUpdateRoom}>Cập nhật</Button>
-                                    <Button variant="outline" onClick={() => setShowEditForm(false)}>Hủy</Button>
+                                    <Button variant="outline" onClick={() => {
+                                        setShowEditForm(false);
+                                        setEditRoom(null);
+                                        setSelectedRoom(null); // 👈 thêm dòng này
+                                    }}>Hủy</Button>
                                 </div>
-
                             </CardContent>
                         </Card>
                     )}
-
                     {/* PHÒNG CỦA MÌNH */}
-                    <h2 className="text-2xl font-bold mb-4">Phòng của bạn</h2>
+                    {myRooms.filter(room => String(room.nguoi_tao_id) === String(userId)).length > 0 && (
+                        <>
+                            <h2 className="text-2xl font-bold mb-4">Phòng của bạn</h2>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {myRooms
+                                    .filter(room => String(room.nguoi_tao_id) === String(userId)) // 👈 chỉ lấy phòng mình tạo
+                                    .map(room => {
+                                        const isOwner = Number(room.nguoi_tao_id) === Number(userId);
+                                        return (
+                                            <Card
+                                                key={room.id}
+                                                className="hover:shadow-lg transition-shadow cursor-pointer"
+                                                onClick={(e) => {
+                                                    if ((e.target as HTMLElement).closest(".no-detail")) return;
+                                                    if (archiveDialogRoom) return; // 🔹 không mở chi tiết khi dialog lưu trữ đang mở
+                                                    setSelectedRoom(room);
+                                                }}
+                                            >
+                                                <CardHeader>
+                                                    <div className="flex justify-between items-start">
+                                                        <div>
+                                                            <Badge
+                                                                className={`room-state ${room.is_public ? "bg-primary text-white" : "bg-red-500 text-white"
+                                                                    }`}
+                                                            >
+                                                                {room.is_public ? "Công khai" : "Riêng tư"}
+                                                            </Badge>
+                                                            <CardTitle>{room.ten_room}</CardTitle>
+                                                            <CardDescription>{room.mo_ta}</CardDescription>
+                                                        </div>
+
+                                                        <div className="flex gap-1">
+                                                            {isOwner && (
+                                                                <>
+                                                                    <Button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            openEditRoom(room);
+                                                                        }}
+                                                                        variant="ghost"
+                                                                        size="sm"
+                                                                        className="no-detail"
+                                                                    >
+                                                                        <Edit className="h-4 w-4" />
+                                                                    </Button>
+                                                                    <Button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setArchiveDialogRoom(room);       // mở dialog lưu trữ
+                                                                            setSelectedRoom(null);             // 🔹 Ẩn chi tiết phòng ngay lập tức
+                                                                        }}
+                                                                        variant="ghost"
+                                                                        size="sm"
+                                                                        className="text-destructive no-detail"
+                                                                    >
+                                                                        <Trash2 className="h-4 w-4" />
+                                                                    </Button>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </CardHeader>
+
+
+                                                <CardContent className="flex flex-col gap-3">
+                                                    {/* Thành viên */}
+                                                    <div>
+                                                        <div className="flex items-center gap-2 mb-2">
+                                                            <Users className="h-4 w-4 text-muted-foreground" />
+                                                            <span className="text-sm font-medium">
+                                                                Thành viên ({room.members?.length ?? 0})
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex flex-wrap gap-1">
+                                                            {(room.members ?? []).slice(0, 3).map((member, index) => (
+                                                                <Badge key={index} variant="secondary" className="text-xs">
+                                                                    {member}
+                                                                </Badge>
+                                                            ))}
+                                                            {room.members && room.members.length > 3 && (
+                                                                <Badge variant="secondary" className="text-xs">
+                                                                    +{room.members.length - 3} khác
+                                                                </Badge>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* URL + copy */}
+                                                    <div className="flex justify-between items-center">
+                                                        <Badge variant="outline">{room.share_url}</Badge>
+                                                        <Button
+                                                            onClick={() => copyInviteCode(room.share_url!)}
+                                                            variant="ghost"
+                                                            size="sm"
+                                                        >
+                                                            <Copy className="h-3 w-3" />
+                                                        </Button>
+                                                    </div>
+                                                    <div className="text-xs text-muted-foreground pt-2 border-t">
+                                                        Ngày tạo:{" "}
+                                                        {room.ngay_tao
+                                                            ? format(new Date(room.ngay_tao), "dd/MM/yyyy HH:mm", { locale: vi })
+                                                            : "Không rõ"}
+                                                    </div>
+                                                </CardContent>
+                                            </Card>
+
+                                        );
+                                    })}
+                            </div>
+                        </>
+                    )}
+
+                    {/* PHÒNG CÔNG KHAI */}
+                    <h2 className="text-2xl font-bold mt-8 mb-4">Phòng công khai</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {myRooms.map(room => {
-                            const isOwner = Number(room.nguoi_tao_id) === Number(userId);
-                            return (
-                                <Card key={room.id} className="hover:shadow-lg transition-shadow" onClick={() => setSelectedRoom(room)}>
-                                    <CardHeader >
-                                        <div className="flex justify-between items-start">
-                                            <div>
-                                                <Badge
-                                                    className={`room-state ${room.is_public ? "bg-primary text-white" : "bg-red-500 text-white"
-                                                        }`}
-                                                >
-                                                    {room.is_public ? "Công khai" : "Riêng tư"}
-                                                </Badge>
+                        {Array.isArray(publicRooms) && publicRooms
+                            .filter(room => room.is_public)
+                            .map(room => (
+                                <Card key={room.id} className="hover:shadow-lg transition-shadow">
+                                    <CardHeader>
+                                        <div>
+                                            <Badge
+                                                className={`room-state ${room.is_public ? "bg-primary text-white" : "bg-red-500 text-white"
+                                                    }`}
+                                            >
+                                                {room.is_public ? "Công khai" : "Riêng tư"}
+                                            </Badge>
 
-                                                <CardTitle>{room.ten_room}</CardTitle>
-                                                <CardDescription>{room.mo_ta}</CardDescription>
-
-                                            </div>
-
-                                            <div className="flex gap-1">
-                                                {isOwner && (
-                                                    <>
-                                                        <Button onClick={() => openEditRoom(room)} variant="ghost" size="sm"><Edit className="h-4 w-4" /></Button>
-                                                        <Button onClick={() => handleDeleteRoom(room.id)} variant="ghost" size="sm" className="text-destructive"><Trash2 className="h-4 w-4" /></Button>
-                                                    </>
-                                                )}
-                                            </div>
+                                            <CardTitle>{room.ten_room}</CardTitle>
+                                            <CardDescription>{room.mo_ta}</CardDescription>
 
                                         </div>
                                     </CardHeader>
 
-                                    {String(room.nguoi_tao_id) === String(userId) && (
-                                        <CardContent className="flex flex-col gap-3">
-                                            {/* Thành viên */}
-                                            <div>
-                                                <div className="flex items-center gap-2 mb-2">
-                                                    <Users className="h-4 w-4 text-muted-foreground" />
-                                                    <span className="text-sm font-medium">
-                                                        Thành viên ({room.members?.length ?? 0})
-                                                    </span>
-                                                </div>
-                                                <div className="flex flex-wrap gap-1">
-                                                    {(room.members ?? []).slice(0, 3).map((member, index) => (
-                                                        <Badge key={index} variant="secondary" className="text-xs">
-                                                            {member}
-                                                        </Badge>
-                                                    ))}
-                                                    {room.members && room.members.length > 3 && (
-                                                        <Badge variant="secondary" className="text-xs">
-                                                            +{room.members.length - 3} khác
-                                                        </Badge>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            {/* URL + copy */}
-                                            <div className="flex justify-between items-center">
-                                                <Badge variant="outline">{room.share_url}</Badge>
-                                                <Button
-                                                    onClick={() => copyInviteCode(room.share_url!)}
-                                                    variant="ghost"
-                                                    size="sm"
-                                                >
-                                                    <Copy className="h-3 w-3" />
-                                                </Button>
-                                            </div>
-                                            <div className="text-xs text-muted-foreground pt-2 border-t">
-                                                Ngày tạo:{" "}
-                                                {room.ngay_tao
-                                                    ? format(new Date(room.ngay_tao), "dd/MM/yyyy HH:mm", { locale: vi })
-                                                    : "Không rõ"}
-                                            </div>
-                                        </CardContent>
-
-                                    )}
-                                </Card>
-                            );
-                        })}
-                    </div>
-                    {/* PHÒNG CÔNG KHAI */}
-                    <h2 className="text-2xl font-bold mt-8 mb-4">Phòng công khai</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {Array.isArray(publicRooms) && publicRooms.map(room => (
-                            <Card key={room.id} className="hover:shadow-lg transition-shadow" >
-                                <CardHeader className="flex justify-between items-start">
-                                    <div>
-                                        <Badge
-                                            className={`room-state ${room.is_public ? "bg-primary text-white" : "bg-red-500 text-white"
-                                                }`}
-                                        >
-                                            {room.is_public ? "Công khai" : "Riêng tư"}
-                                        </Badge>
-
-                                        <CardTitle>{room.ten_room}</CardTitle>
-                                        <CardDescription>{room.mo_ta}</CardDescription>
-                                    </div>
-
-                                </CardHeader>
-                                {String(room.nguoi_tao_id) === String(userId) && (
                                     <CardContent className="flex flex-col gap-3">
                                         {/* Thành viên */}
                                         <div>
@@ -396,10 +463,8 @@ const RoomPage = () => {
                                                 </span>
                                             </div>
                                             <div className="flex flex-wrap gap-1">
-                                                {(room.members ?? []).slice(0, 3).map((member, index) => (
-                                                    <Badge key={index} variant="secondary" className="text-xs">
-                                                        {member}
-                                                    </Badge>
+                                                {(room.members ?? []).slice(0, 3).map((member, i) => (
+                                                    <Badge key={i} variant="secondary" className="text-xs">{member}</Badge>
                                                 ))}
                                                 {room.members && room.members.length > 3 && (
                                                     <Badge variant="secondary" className="text-xs">
@@ -409,22 +474,21 @@ const RoomPage = () => {
                                             </div>
                                         </div>
 
-                                        {/* URL + copy */}
+                                        {/* URL + Copy */}
                                         <div className="flex justify-between items-center">
                                             <Badge variant="outline">{room.share_url}</Badge>
-                                            <Button
-                                                onClick={() => copyInviteCode(room.share_url!)}
-                                                variant="ghost"
-                                                size="sm"
-                                            >
+                                            <Button onClick={() => copyInviteCode(room.share_url!)} variant="ghost" size="sm">
                                                 <Copy className="h-3 w-3" />
                                             </Button>
                                         </div>
+
+                                        {/* Nút tham gia */}
                                         <div className="flex gap-1">
-                                            <Button onClick={() => enterRoom(room.id)} variant="ghost" size="sm">
+                                            <Button onClick={() => enterRoom(room.id)} variant="default" size="sm">
                                                 Tham gia
                                             </Button>
                                         </div>
+
                                         <div className="text-xs text-muted-foreground pt-2 border-t">
                                             Ngày tạo:{" "}
                                             {room.ngay_tao
@@ -432,12 +496,45 @@ const RoomPage = () => {
                                                 : "Không rõ"}
                                         </div>
                                     </CardContent>
-                                )}
-                            </Card>
-                        ))}
+                                </Card>
+                            ))}
                     </div>
+                    {/* Dialog Lưu trữ phòng */}
+                    {archiveDialogRoom && (
+                        <Dialog
+                            open={archiveDialogRoom !== null}
+                            onOpenChange={(open) => {
+                                if (!open) setArchiveDialogRoom(null);
+                            }}
+                        >
+                            <DialogContent onClick={(e) => e.stopPropagation()} className="max-w-md">
+                                <DialogHeader>
+                                    <DialogTitle>Lưu trữ phòng?</DialogTitle>
+                                    <DialogDescription>
+                                        Bạn có chắc muốn lưu trữ phòng <b>{archiveDialogRoom.ten_room}</b>?
+                                    </DialogDescription>
+                                </DialogHeader>
+                                <div className="flex justify-end gap-2 mt-4">
+                                    <DialogClose asChild>
+                                        <Button variant="outline">Hủy</Button>
+                                    </DialogClose>
+                                    <Button
+                                        className="bg-yellow-600 text-white hover:bg-yellow-700"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleArchiveRoom(archiveDialogRoom.id);
+                                            setArchiveDialogRoom(null);
+                                        }}
+                                    >
+                                        Lưu trữ
+                                    </Button>
+                                </div>
+                            </DialogContent>
+                        </Dialog>
+                    )}
+
                     {/* Dialog hiển thị chi tiết */}
-                    <Dialog open={!!selectedRoom} onOpenChange={() => setSelectedRoom(null)}>
+                    <Dialog open={selectedRoom !== null && !showEditForm} onOpenChange={() => setSelectedRoom(null)}>
                         <DialogContent className="max-w-lg rounded-2xl shadow-xl p-6 bg-white">
                             {selectedRoom && (
                                 <>
