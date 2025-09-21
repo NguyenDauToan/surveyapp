@@ -3,13 +3,11 @@ import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
 
-// https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 5173,
     proxy: {
-      // tất cả request bắt đầu bằng /api sẽ được chuyển tới backend
       "/api": {
         target: "https://survey-server-m884.onrender.com",
         changeOrigin: true,
@@ -23,4 +21,11 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  optimizeDeps: {
+    include: [
+      "@radix-ui/react-tabs",
+      "lucide-react" // chắc chắn Vite pre-bundle các package này
+    ],
+  },
+  // Nếu bạn không dùng SSR, xóa luôn phần ssr.noExternal
 }));

@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Menu, X, LogOut, Settings, Plus } from "lucide-react";
+import { Menu, X, LogOut, Settings, Plus, ArchiveIcon } from "lucide-react";
 import { useState } from "react";
 import LoginDialog from "@/layout/LoginDialog";
 import MySurveys from "@/pages/MySurveys";
@@ -12,12 +12,15 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
+import ArchiveDialog from "@/pages/ArchivedRoomsDialog";
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [isMySurveyOpen, setIsMySurveyOpen] = useState(false);
+  const [isArchiveOpen, setIsArchiveOpen] = useState(false);
 
   const dispatch = useDispatch();
   const { user } = useSelector((state: RootState) => state.auth);
@@ -42,7 +45,6 @@ const Header = () => {
 
         {/* Desktop Nav */}
         
-
         {/* Actions */}
         <div className="flex items-center gap-3">
           {!user ? (

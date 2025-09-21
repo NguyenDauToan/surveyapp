@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Copy, Edit, Users, Archive } from "lucide-react";
+import { Plus, Trash2, Copy, Edit, Users, User, Archive } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
 import { archiveRoomAPI, deleteRoomAPI, removeRoomPasswordAPI, setRoomPasswordAPI, updateRoomAPI } from "@/api/Api";
@@ -17,6 +17,8 @@ import { vi } from "date-fns/locale";
 import Header from "@/components/Header";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogClose } from "@/components/ui/dialog";
 import ArchivedRooms from "./ArchivedRooms";
+import ArchiveDialog from "./ArchivedRoomsDialog";
+
 
 interface Room {
     id: number;
@@ -196,22 +198,24 @@ const RoomPage = () => {
                                 <Plus className="h-4 w-4" /> Tạo phòng mới
                             </Button>
                             {/* Nút Phòng đã lưu trữ */}
-                            <Dialog>
-                                <DialogTrigger asChild>
-                                    <Button variant="outline">
-                                        <Archive className="h-4 w-4 mr-2" />
-                                        Phòng đã lưu trữ
-                                    </Button>
-                                </DialogTrigger>
-                                <DialogContent className="max-w-3xl">
-                                    <DialogHeader>
-                                        <DialogTitle>Phòng đã lưu trữ</DialogTitle>
-                                    </DialogHeader>
+                            <ArchiveDialog
+                                onRestore={(room) => {
+                                    setMyRooms(prev => [
+                                        {
+                                            id: Number(room.id),
+                                            ten_room: room.ten_room,
+                                            mo_ta: room.mo_ta,
+                                            members: room.members,
+                                            trang_thai: "active",
+                                            ngay_tao: room.ngay_tao,
+                                            nguoi_tao_id: userId,
+                                            share_url: room.share_url || `${window.location.origin}/room/${room.id}`,
+                                        },
+                                        ...prev
+                                    ]);
+                                }}
+                            />
 
-                                    {/* Component hiển thị danh sách đã lưu trữ */}
-                                    <ArchivedRooms token={token || ""} />
-                                </DialogContent>
-                            </Dialog>
                         </div>
                     </div>
                     {/* CREATE FORM */}
@@ -333,7 +337,7 @@ const RoomPage = () => {
                                                 onClick={(e) => {
                                                     if ((e.target as HTMLElement).closest(".no-detail")) return;
                                                     if (archiveDialogRoom) return; // 🔹 không mở chi tiết khi dialog lưu trữ đang mở
-                                                    setSelectedRoom(room);
+                                                    setSelectedRoom({ ...room, isMine: true }); // 👈 thêm isMine
                                                 }}
                                             >
                                                 <CardHeader>
@@ -431,74 +435,101 @@ const RoomPage = () => {
                         </>
                     )}
 
+                    {/* Empty State */}
+                    {!showCreateForm &&
+                        myRooms.filter(r => String(r.nguoi_tao_id) === String(userId)).length === 0 &&
+                        publicRooms.filter(r => r.is_public).length === 0 && (
+                            <div className="text-center py-12">
+                                <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                                <h3 className="text-lg font-medium text-foreground mb-2">Chưa có phòng nào</h3>
+                                <p className="text-muted-foreground mb-4">Tạo phòng đầu tiên để bắt đầu</p>
+                                <Button onClick={() => setShowCreateForm(true)} className="flex items-center justify-center gap-2 mx-auto">
+                                    <Plus className="h-4 w-4" /> Tạo phòng mới
+                                </Button>
+                            </div>
+                        )}
+
+
+
                     {/* PHÒNG CÔNG KHAI */}
-                    <h2 className="text-2xl font-bold mt-8 mb-4">Phòng công khai</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {Array.isArray(publicRooms) && publicRooms
-                            .filter(room => room.is_public)
-                            .map(room => (
-                                <Card key={room.id} className="hover:shadow-lg transition-shadow">
-                                    <CardHeader>
-                                        <div>
-                                            <Badge
-                                                className={`room-state ${room.is_public ? "bg-primary text-white" : "bg-red-500 text-white"
-                                                    }`}
-                                            >
-                                                {room.is_public ? "Công khai" : "Riêng tư"}
-                                            </Badge>
-
-                                            <CardTitle>{room.ten_room}</CardTitle>
-                                            <CardDescription>{room.mo_ta}</CardDescription>
-
-                                        </div>
-                                    </CardHeader>
-
-                                    <CardContent className="flex flex-col gap-3">
-                                        {/* Thành viên */}
-                                        <div>
-                                            <div className="flex items-center gap-2 mb-2">
-                                                <Users className="h-4 w-4 text-muted-foreground" />
-                                                <span className="text-sm font-medium">
-                                                    Thành viên ({room.members?.length ?? 0})
-                                                </span>
-                                            </div>
-                                            <div className="flex flex-wrap gap-1">
-                                                {(room.members ?? []).slice(0, 3).map((member, i) => (
-                                                    <Badge key={i} variant="secondary" className="text-xs">{member}</Badge>
-                                                ))}
-                                                {room.members && room.members.length > 3 && (
-                                                    <Badge variant="secondary" className="text-xs">
-                                                        +{room.members.length - 3} khác
+                    {Array.isArray(publicRooms) && publicRooms.some(room => room.is_public) && (
+                        <>
+                            <h2 className="text-2xl font-bold mt-8 mb-4">Phòng công khai</h2>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {publicRooms
+                                    .filter(room => room.is_public)
+                                    .map(room => (
+                                        <Card
+                                            key={room.id}
+                                            className="hover:shadow-lg transition-shadow cursor-pointer"
+                                            onClick={(e) => {
+                                                if ((e.target as HTMLElement).closest(".no-detail")) return;
+                                                if (archiveDialogRoom) return; // không mở khi dialog lưu trữ đang mở
+                                                setSelectedRoom({ ...room, isMine: false });
+                                            }}
+                                        >
+                                            <CardHeader>
+                                                <div>
+                                                    <Badge
+                                                        className={`room-state ${room.is_public ? "bg-primary text-white" : "bg-red-500 text-white"}`}
+                                                    >
+                                                        {room.is_public ? "Công khai" : "Riêng tư"}
                                                     </Badge>
-                                                )}
-                                            </div>
-                                        </div>
 
-                                        {/* URL + Copy */}
-                                        <div className="flex justify-between items-center">
-                                            <Badge variant="outline">{room.share_url}</Badge>
-                                            <Button onClick={() => copyInviteCode(room.share_url!)} variant="ghost" size="sm">
-                                                <Copy className="h-3 w-3" />
-                                            </Button>
-                                        </div>
+                                                    <CardTitle>{room.ten_room}</CardTitle>
+                                                    <CardDescription>{room.mo_ta}</CardDescription>
+                                                </div>
+                                            </CardHeader>
 
-                                        {/* Nút tham gia */}
-                                        <div className="flex gap-1">
-                                            <Button onClick={() => enterRoom(room.id)} variant="default" size="sm">
-                                                Tham gia
-                                            </Button>
-                                        </div>
+                                            <CardContent className="flex flex-col gap-3">
+                                                {/* Thành viên */}
+                                                <div>
+                                                    <div className="flex items-center gap-2 mb-2">
+                                                        <Users className="h-4 w-4 text-muted-foreground" />
+                                                        <span className="text-sm font-medium">
+                                                            Thành viên ({room.members?.length ?? 0})
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {(room.members ?? []).slice(0, 3).map((member, i) => (
+                                                            <Badge key={i} variant="secondary" className="text-xs">{member}</Badge>
+                                                        ))}
+                                                        {room.members && room.members.length > 3 && (
+                                                            <Badge variant="secondary" className="text-xs">
+                                                                +{room.members.length - 3} khác
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                </div>
 
-                                        <div className="text-xs text-muted-foreground pt-2 border-t">
-                                            Ngày tạo:{" "}
-                                            {room.ngay_tao
-                                                ? format(new Date(room.ngay_tao), "dd/MM/yyyy HH:mm", { locale: vi })
-                                                : "Không rõ"}
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            ))}
-                    </div>
+                                                {/* URL + Copy */}
+                                                <div className="flex justify-between items-center">
+                                                    <Badge variant="outline">{room.share_url}</Badge>
+                                                    <Button onClick={() => copyInviteCode(room.share_url!)} variant="ghost" size="sm">
+                                                        <Copy className="h-3 w-3" />
+                                                    </Button>
+                                                </div>
+
+                                                {/* Nút tham gia */}
+                                                <div className="flex gap-1">
+                                                    <Button onClick={() => enterRoom(room.id)} variant="default" size="sm">
+                                                        Tham gia
+                                                    </Button>
+                                                </div>
+
+                                                <div className="text-xs text-muted-foreground pt-2 border-t">
+                                                    Ngày tạo:{" "}
+                                                    {room.ngay_tao
+                                                        ? format(new Date(room.ngay_tao), "dd/MM/yyyy HH:mm", { locale: vi })
+                                                        : "Không rõ"}
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+                                    ))}
+                            </div>
+                        </>
+                    )}
+
                     {/* Dialog Lưu trữ phòng */}
                     {archiveDialogRoom && (
                         <Dialog
@@ -570,36 +601,29 @@ const RoomPage = () => {
                                         <div>
                                             <div className="flex items-center justify-between mb-2">
                                                 <p className="text-sm font-medium text-muted-foreground">Thành viên</p>
-                                                {/* Nút thêm thành viên */}
-                                                <Dialog>
-                                                    <DialogTrigger asChild>
-                                                        <Button size="sm" variant="outline" className="text-xs">
-                                                            + Thêm
-                                                        </Button>
-                                                    </DialogTrigger>
-                                                    <DialogContent className="max-w-sm rounded-xl">
-                                                        <DialogHeader>
-                                                            <DialogTitle>Thêm thành viên</DialogTitle>
-                                                            <DialogDescription>
-                                                                Nhập email hoặc tên người dùng để mời tham gia phòng.
-                                                            </DialogDescription>
-                                                        </DialogHeader>
-                                                        <div className="flex gap-2">
-                                                            <Input
-                                                                placeholder="Nhập email hoặc username..."
-                                                            // onChange={(e) => setInviteValue(e.target.value)}
-                                                            />
-                                                            <Button
-                                                                onClick={() => {
-                                                                    // TODO: gọi API thêm thành viên ở đây
-                                                                    // addMember(selectedRoom.id, inviteValue)
-                                                                }}
-                                                            >
-                                                                Mời
+                                                {/* Chỉ hiển thị nút "+ Thêm" khi là phòng của bạn */}
+                                                {selectedRoom.isMine && (
+                                                    <Dialog>
+                                                        <DialogTrigger asChild>
+                                                            <Button size="sm" variant="outline" className="text-xs">
+                                                                + Thêm
                                                             </Button>
-                                                        </div>
-                                                    </DialogContent>
-                                                </Dialog>
+                                                        </DialogTrigger>
+                                                        <DialogContent className="max-w-sm rounded-xl">
+                                                            <DialogHeader>
+                                                                <DialogTitle>Thêm thành viên</DialogTitle>
+                                                                <DialogDescription>
+                                                                    Nhập email hoặc tên người dùng để mời tham gia phòng.
+                                                                </DialogDescription>
+                                                            </DialogHeader>
+                                                            <div className="flex gap-2">
+                                                                <Input placeholder="Nhập email hoặc username..." />
+                                                                <Button onClick={() => {/* TODO: gọi API thêm thành viên */ }}>Mời</Button>
+                                                            </div>
+                                                        </DialogContent>
+                                                    </Dialog>
+                                                )}
+
                                             </div>
 
                                             <div className="flex flex-wrap gap-2">
@@ -618,6 +642,7 @@ const RoomPage = () => {
                                                 )}
                                             </div>
                                         </div>
+
 
                                         {/* Link chia sẻ */}
                                         <div>

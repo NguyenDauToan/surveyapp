@@ -10,7 +10,7 @@ import LoginDialog from "./layout/LoginDialog";
 import SurveyCreate from "./pages/SurveyCreate";
 import MySurveys from "./pages/MySurveys";
 import Room from "./pages/Room";
-
+import Archive from "./pages/ArchivedRoomsDialog";
 // Admin
 import RequireAdmin from "./routes/RequireAdmin";
 import Admin from "./layout/admin/AdminLayout";
