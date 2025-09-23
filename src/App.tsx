@@ -15,6 +15,7 @@ import Archive from "./pages/ArchivedRoomsDialog";
 import RequireAdmin from "./routes/RequireAdmin";
 import Admin from "./layout/admin/AdminLayout";
 import IndexPage from "./components/indexPage";
+import FormDetail from "./pages/FormDetail";
 
 const queryClient = new QueryClient();
 
@@ -31,6 +32,7 @@ const App = () => (
           <Route path="/create" element={<SurveyCreate />} />
           <Route path="/rooms" element={<Room />} />
           <Route path="/page" element={<IndexPage />} />
+          <Route path="/form/:id" element={<FormDetail />} />
 
           {/* Admin routes */}
           <Route element={<RequireAdmin />}>

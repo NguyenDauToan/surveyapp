@@ -7,24 +7,60 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Settings, FileText, Clock } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { toast } from "sonner"; // hoặc alert()
+import { useNavigate } from "react-router-dom";
+import axios from "axios";
+import { getMyFormsAPI } from "@/api/Api";
+import FormDetailDialog from "@/pages/FormDetail";
 
-const Hero = () => {
+interface CreateSurveyCardProps {
+  isLoggedIn: boolean; // state đăng nhập
+}
+const Hero = ({ isLoggedIn }: CreateSurveyCardProps) => {
+  const navigate = useNavigate();
+  const [surveys, setSurveys] = useState<any[]>([]);
+  // Gọi API lấy khảo sát gần đây
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [open, setOpen] = useState(false);
 
-  const [surveys] = useState([
-    { id: 1, title: "Khảo sát hài lòng khách hàng", responses: 45, status: "active", created: "2 ngày trước" },
-    { id: 2, title: "Đánh giá sản phẩm mới", responses: 23, status: "draft", created: "1 tuần trước" },
-    { id: 3, title: "Phản hồi nhân viên", responses: 67, status: "completed", created: "3 ngày trước" },
-  ]);
+  useEffect(() => {
+    if (!isLoggedIn) return;
+
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    getMyFormsAPI(token)
+      .then((data) => {
+        setSurveys(data || []);
+      })
+      .catch((err) => {
+        console.error("❌ Lỗi load forms:", err);
+        toast.error("Không tải được khảo sát của bạn");
+      });
+  }, [isLoggedIn]);
+
+  const handleOpen = (id: number) => {
+    setSelectedId(id);
+    setOpen(true);
+  };
+
+  const handleClick = () => {
+    if (!isLoggedIn) {
+      toast.error("Bạn cần đăng nhập để tạo khảo sát", { duration: 1000 });
+      return;
+    }
+    navigate("/create");
+  };
+
+
   return (
     <main className="container max-w-screen-xl mx-auto px-4 py-8">
       {/* Quick Actions */}
       <div className="mb-8">
-
-
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <Link to="/create" className="block">
-            <Card className="cursor-pointer hover:shadow-md transition-shadow">
+          <div onClick={handleClick} className="block cursor-pointer">
+            <Card className="hover:shadow-md transition-shadow">
               <CardContent className="p-6 text-center">
                 <Plus className="h-8 w-8 mx-auto mb-2 text-primary" />
                 <p className="font-semibold">Tạo khảo sát</p>
@@ -33,16 +69,22 @@ const Hero = () => {
                 </p>
               </CardContent>
             </Card>
-          </Link>
-          <Link to="/rooms" className="block">
-            <Card className="cursor-pointer hover:shadow-md transition-shadow">
+          </div>
+          <div onClick={() => {
+            if (!isLoggedIn) {
+              toast.error("Bạn cần đăng nhập để vào phòng khảo sát", { duration: 1000 });
+              return;
+            }
+            navigate("/rooms");
+          }} className="block cursor-pointer">
+            <Card className="hover:shadow-md transition-shadow">
               <CardContent className="p-6 text-center">
                 <Users className="h-8 w-8 mx-auto mb-2 text-primary" />
                 <h3 className="font-semibold">Phòng khảo sát</h3>
                 <p className="text-sm text-muted-foreground">Tạo và quản lý phòng</p>
               </CardContent>
             </Card>
-          </Link>
+          </div>
           <Card className="cursor-pointer hover:shadow-md transition-shadow">
             <CardContent className="p-6 text-center">
               <BarChart3 className="h-8 w-8 mx-auto mb-2 text-primary" />
@@ -50,7 +92,6 @@ const Hero = () => {
               <p className="text-sm text-muted-foreground">Xem báo cáo chi tiết</p>
             </CardContent>
           </Card>
-
           <Card className="cursor-pointer hover:shadow-md transition-shadow">
             <CardContent className="p-6 text-center">
               <FileText className="h-8 w-8 mx-auto mb-2 text-primary" />
@@ -60,7 +101,6 @@ const Hero = () => {
           </Card>
         </div>
       </div>
-
       {/* Recent Surveys */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2">
@@ -71,34 +111,58 @@ const Hero = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {surveys.map((survey) => (
-                  <div key={survey.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors">
-                    <div className="flex-1">
-                      <h4 className="font-semibold text-foreground">{survey.title}</h4>
-                      <div className="flex items-center space-x-4 mt-1">
-                        <span className="text-sm text-muted-foreground flex items-center">
-                          <Users className="h-4 w-4 mr-1" />
-                          {survey.responses} phản hồi
-                        </span>
-                        <span className="text-sm text-muted-foreground flex items-center">
-                          <Clock className="h-4 w-4 mr-1" />
-                          {survey.created}
-                        </span>
+                {surveys.length > 0 ? (
+                  surveys.map((survey) => (
+                    <div
+                      key={survey.id}
+                      className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors"
+                    >
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-foreground">{survey.title}</h4>
+                        <div className="flex items-center space-x-4 mt-1">
+                          <span className="text-sm text-muted-foreground flex items-center">
+                            <Clock className="h-4 w-4 mr-1" />
+                            {survey.created_at
+                              ? new Date(survey.created_at).toLocaleDateString("vi-VN")
+                              : "—"}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Badge
+                          variant={
+                            survey.status === "active"
+                              ? "default"
+                              : survey.status === "archived"
+                                ? "secondary"
+                                : "outline"
+                          }
+                        >
+                          {survey.status === "active"
+                            ? "Đang hoạt động"
+                            : survey.status === "archived"
+                              ? "Đã lưu trữ"
+                              : "Khác"}
+                        </Badge>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleOpen(survey.id)}
+                        >
+                          Xem
+                        </Button>
+                        <FormDetailDialog id={selectedId} open={open} onOpenChange={setOpen} />
+
                       </div>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <Badge variant={survey.status === 'active' ? 'default' : survey.status === 'completed' ? 'secondary' : 'outline'}>
-                        {survey.status === 'active' ? 'Đang hoạt động' : survey.status === 'completed' ? 'Hoàn thành' : 'Nháp'}
-                      </Badge>
-                      <Button variant="ghost" size="sm">
-                        Xem
-                      </Button>
-                    </div>
-                  </div>
-                ))}
+                  ))
+                ) : (
+                  <p className="text-sm text-muted-foreground">Chưa có khảo sát nào</p>
+                )}
+
               </div>
               <div className="mt-4 pt-4 border-t">
-                <Button variant="outline" className="w-full">
+                <Button variant="outline" className="w-full" onClick={() => navigate("/forms")}>
                   Xem tất cả khảo sát
                 </Button>
               </div>

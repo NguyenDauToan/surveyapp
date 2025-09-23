@@ -2,14 +2,14 @@ import { useState, useEffect } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Archive as ArchiveIcon, Search, X, RotateCcw } from "lucide-react";
+import { Archive as ArchiveIcon, Search, X, RotateCcw, Trash2 } from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
 
 export interface ArchivedRoom {
   id: number | string;
-  ten_room: string;        // tên phòng
-  mo_ta?: string | null;   // mô tả
+  ten_room: string;
+  mo_ta?: string | null;
   members?: string[];
   ngay_tao?: string;
   share_url?: string;
@@ -31,6 +31,7 @@ export default function ArchivedRoomsDialog({ onRestore }: ArchivedRoomsDialogPr
   const [archivedRooms, setArchivedRooms] = useState<ArchivedRoom[]>([]);
   const [loading, setLoading] = useState(false);
   const [restoringId, setRestoringId] = useState<number | string | null>(null);
+  const [deletingId, setDeletingId] = useState<number | string | null>(null);
 
   const filteredRooms = archivedRooms.filter(r =>
     r.ten_room.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -46,7 +47,6 @@ export default function ArchivedRoomsDialog({ onRestore }: ArchivedRoomsDialogPr
         params: { trang_thai: "archived" },
       });
 
-      // Map API response về interface ArchivedRoom chuẩn
       const rooms: ArchivedRoom[] = res.data.data.map((r: any) => ({
         id: r.id,
         ten_room: r.ten_room,
@@ -79,10 +79,8 @@ export default function ArchivedRoomsDialog({ onRestore }: ArchivedRoomsDialogPr
       const restoredRoom = archivedRooms.find(r => String(r.id) === String(id));
       if (!restoredRoom) return;
 
-      // Xóa khỏi danh sách archived ngay lập tức
       setArchivedRooms(prev => prev.filter(r => String(r.id) !== String(id)));
 
-      // Gọi callback onRestore nếu có
       if (onRestore) onRestore({ ...restoredRoom, trang_thai: "active" });
 
       toast.success("Khôi phục phòng thành công");
@@ -90,6 +88,25 @@ export default function ArchivedRoomsDialog({ onRestore }: ArchivedRoomsDialogPr
       toast.error(err.response?.data?.message || "Không thể khôi phục phòng");
     } finally {
       setRestoringId(null);
+    }
+  };
+
+  const handleDelete = async (id: number | string) => {
+    if (!userToken) return;
+    if (!confirm("Bạn có chắc muốn xóa phòng này vĩnh viễn?")) return;
+
+    try {
+      setDeletingId(id);
+      await axios.delete(`${API_BASE}/rooms/${id}`, {
+        headers: { Authorization: `Bearer ${userToken}` },
+      });
+
+      setArchivedRooms(prev => prev.filter(r => String(r.id) !== String(id)));
+      toast.success("Xóa phòng thành công");
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Không thể xóa phòng");
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -153,14 +170,25 @@ export default function ArchivedRoomsDialog({ onRestore }: ArchivedRoomsDialogPr
                   </p>
                 </div>
 
-                <Button
-                  onClick={() => handleRestore(room.id)}
-                  className="flex items-center gap-2 bg-emerald-600 text-white hover:bg-emerald-700 rounded-lg shadow-sm transition-colors duration-200"
-                  disabled={restoringId === room.id}
-                >
-                  <RotateCcw className={`h-4 w-4 ${restoringId === room.id ? "animate-spin" : ""}`} />
-                  {restoringId === room.id ? "Đang khôi phục..." : "Khôi phục"}
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() => handleRestore(room.id)}
+                    className="flex items-center gap-2 bg-emerald-600 text-white hover:bg-emerald-700 rounded-lg shadow-sm transition-colors duration-200"
+                    disabled={restoringId === room.id || deletingId === room.id}
+                  >
+                    <RotateCcw className={`h-4 w-4 ${restoringId === room.id ? "animate-spin" : ""}`} />
+                    {restoringId === room.id ? "Đang khôi phục..." : "Khôi phục"}
+                  </Button>
+
+                  <Button
+                    onClick={() => handleDelete(room.id)}
+                    className="flex items-center gap-2 bg-red-600 text-white hover:bg-red-700 rounded-lg shadow-sm transition-colors duration-200"
+                    disabled={deletingId === room.id || restoringId === room.id}
+                  >
+                    <Trash2 className={`h-4 w-4 ${deletingId === room.id ? "animate-spin" : ""}`} />
+                    {deletingId === room.id ? "Đang xóa..." : "Xóa"}
+                  </Button>
+                </div>
               </div>
             ))}
           </div>

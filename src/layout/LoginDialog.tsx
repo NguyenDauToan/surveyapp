@@ -107,7 +107,7 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 
         const script = document.createElement("script");
         script.src = "https://accounts.google.com/gsi/client";
-        script.crossOrigin = "anonymous";
+        script.crossOrigin = "anonymous"; 
         script.id = "google-client-script";
         script.async = true;
         script.defer = true;

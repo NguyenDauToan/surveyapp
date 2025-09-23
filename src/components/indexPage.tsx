@@ -16,28 +16,7 @@ const IndexPage = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50 w-full border-b border-border/40">
-        <div className="container flex h-16 max-w-screen-xl items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-              <span className="text-white font-bold text-sm">S</span>
-            </div>
-            <span className="font-bold text-xl text-foreground">SurveyPro</span>
-          </div>
-          
-          <div className="flex items-center space-x-4">
-            <Button variant="ghost" size="sm">
-              <Settings className="h-4 w-4 mr-2" />
-              Cài đặt
-            </Button>
-            <Button variant="hero" size="sm">
-              <Plus className="h-4 w-4 mr-2" />
-              Tạo khảo sát mới
-            </Button>
-          </div>
-        </div>
-      </header>
-
+      
       <main className="container max-w-screen-xl mx-auto px-4 py-8">
         {/* Quick Actions */}
         <div className="mb-8">

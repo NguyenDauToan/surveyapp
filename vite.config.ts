@@ -4,6 +4,7 @@ import path from "path";
 import { componentTagger } from "lovable-tagger";
 
 export default defineConfig(({ mode }) => ({
+  base: "/surveyapp/", // thêm dòng này để deploy lên GitHub Pages
   server: {
     host: "::",
     port: 5173,
