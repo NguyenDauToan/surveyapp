@@ -41,7 +41,7 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
   const handleCredentialResponse = async (response: GoogleCredentialResponse) => {
     console.log("Credential response:", response);
     if (!response.credential) return console.error("❌ Không nhận được ID Token từ Google");
-
+  
     try {
       const res = await fetch(
         "https://survey-server-m884.onrender.com/api/auth/google/login",
@@ -50,40 +50,41 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id_token: response.credential }),
         }
-      ); 
+      );
+  
       if (!res.ok) {
         const err = await res.text();
         console.error("Backend error:", err);
         throw new Error(err);
       }
-
-      const data: BackendResponse = await res.json();
-
+  
+      const data = await res.json();
+  
       if (data.user && data.token) {
+        // Chuẩn hóa user object
         const user = {
-          ...data.user,
-          Ten: data.user.ten,
+          id: data.user.id,
+          ten: data.user.ten,
+          email: data.user.email,
+          vai_tro: data.user.vai_tro,
+          ngay_tao: data.user.ngay_tao,
           role: data.user.vai_tro ? "admin" : "user",
         };
-      
+  
+        // Cập nhật redux
         dispatch(login({ user, token: data.token }));
-      
-        // ✅ Lưu token và user
+  
+        // Lưu localStorage
         localStorage.setItem("token", data.token);
         localStorage.setItem("user", JSON.stringify(user));
-      
-        // ✅ Lưu user_id riêng dưới dạng string
-        localStorage.setItem("user_id", String(data.user.id));
-      
-        if (user.role === "admin") {
-          navigate("/admin");
-        } else {
-          navigate("/");
-        }
-      
+        localStorage.setItem("user_id", String(user.id));
+  
+        // Điều hướng
+        if (user.role === "admin") navigate("/admin");
+        else navigate("/");
+  
         onOpenChange(false);
-      }
-      else {
+      } else {
         alert("Đăng nhập thất bại");
       }
     } catch (err) {
@@ -91,7 +92,8 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
       alert("Lỗi khi đăng nhập Google");
     }
   };
-
+  
+  
   useEffect(() => {
     if (!open) return;
 

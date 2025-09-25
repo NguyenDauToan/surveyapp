@@ -62,7 +62,7 @@ const Header = () => {
           ) : (
             <div className="flex items-center gap-3">
               <span className="text-sm font-medium text-foreground">
-                👋 Xin chào: {user.Ten || "User"}
+                👋 Xin chào: {user.ten || "User"}
               </span>
               <Button variant="ghost" size="icon" onClick={handleLogout}>
                 <LogOut className="h-4 w-4" />

@@ -33,9 +33,15 @@ export default function ArchivedRooms({ token, onRestore }: Props) {
     if (!token) return;
     try {
       setLoading(true);
-      const data = await getArchivedRoomsAPI(token);
-
-      const rooms: ArchivedRoom[] = data.map((r: any) => ({
+  
+      // Lấy dữ liệu từ API
+      const res = await getArchivedRoomsAPI(token);
+  
+      // res.data.data chính là mảng room từ backend
+      const roomsData = res.data.data || [];
+  
+      // Map ra kiểu ArchivedRoom
+      const rooms: ArchivedRoom[] = roomsData.map((r: any) => ({
         id: r.id,
         ten_room: r.ten_room,
         mo_ta: r.mo_ta || "",
@@ -47,7 +53,7 @@ export default function ArchivedRooms({ token, onRestore }: Props) {
         is_public: r.is_public,
         khoa: r.khoa,
       }));
-
+  
       setArchivedRooms(rooms);
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Không lấy được danh sách phòng đã lưu trữ");
@@ -55,6 +61,7 @@ export default function ArchivedRooms({ token, onRestore }: Props) {
       setLoading(false);
     }
   };
+  
 
   const handleRestore = async (roomId: number) => {
     if (!token) return;
