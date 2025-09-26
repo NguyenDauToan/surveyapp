@@ -77,6 +77,8 @@ const RoomPage = () => {
     const [invites, setInvites] = useState<RoomInvite[]>([]);
     const [pendingInvitesCount, setPendingInvitesCount] = useState(0);
     const [pendingInvitesSent, setPendingInvitesSent] = useState<RoomInvite[]>([]);
+    const [membersLoading, setMembersLoading] = useState(false); // 👈 Thêm loading cho members
+
     const updatePendingCount = (invitesList: RoomInvite[]) => {
         setPendingInvitesCount(invitesList.filter(i => i.status === "pending").length);
     };

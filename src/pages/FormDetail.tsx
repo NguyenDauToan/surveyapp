@@ -43,7 +43,7 @@ interface FormDTO {
   questions: QuestionDTO[];
 }
 
-const FormDetailDialog = ({ id, open, onOpenChange }: Props) => {
+const FormDetail = ({ id, open, onOpenChange }: Props) => {
   const token = useSelector((state: RootState) => state.auth.token);
   const [form, setForm] = useState<FormDTO | null>(null); // Xác định kiểu cho form
   const [loading, setLoading] = useState(false);
@@ -156,4 +156,4 @@ const FormDetailDialog = ({ id, open, onOpenChange }: Props) => {
   );
 };
 
-export default FormDetailDialog;
+export default FormDetail;

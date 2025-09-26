@@ -44,7 +44,11 @@ const Header = () => {
         </Link>
 
         {/* Desktop Nav */}
-        
+        <nav>
+          <Link to='/demo'>
+          Demo
+           </Link>
+        </nav>
         {/* Actions */}
         <div className="flex items-center gap-3">
           {!user ? (

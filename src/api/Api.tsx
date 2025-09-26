@@ -379,7 +379,12 @@ export const getUserByEmailOrUsername = async (email: string, token: string) => 
     params: { email }, // thay vì query
   });
 };
-
+export const getUserByIdAPI = async (userId: number, token: string) => {
+  return axios.get(`${API_BASE}/users`, {  // 👈 Assume backend hỗ trợ search by id param
+    headers: { Authorization: `Bearer ${token}` },
+    params: { id: userId },  // Hoặc /users/${userId} nếu có endpoint riêng
+  });
+};
 // =================== ROOM MEMBER ===================
 // Invite member
 export const inviteMemberAPI = (roomId: number, token: string, userId: number) => {
