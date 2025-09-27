@@ -55,7 +55,9 @@ interface Room {
     khoa?: boolean;
     mat_khau?: string;
     members?: Member[]; // 👈 đổi từ string[] sang Member[]
+     is_locked?: boolean;
 }
+
 interface RoomWithIsMine extends Room {
     isMine?: boolean;
 }
@@ -75,6 +77,9 @@ const RoomPage = () => {
     const [members, setMembers] = useState<Member[]>([]);
     const [showInviteDialog, setShowInviteDialog] = useState(false);
     const [invites, setInvites] = useState<RoomInvite[]>([]);
+    //    =====
+    const [isLocking, setIsLocking] = useState(false);
+
     const fetchMembers = async (roomId: number) => {
         if (!token) return;
         try {
@@ -95,6 +100,47 @@ const RoomPage = () => {
         }
     };
     useEffect(() => { fetchInvites(); }, []);
+
+// ================= KHÓA / MỞ KHÓA PHÒNG =================
+const handleLockRoom = async (roomId: number, lock: boolean) => {
+  if (!token) return toast.error("Bạn phải đăng nhập để thực hiện");
+
+  try {
+    setIsLocking(true);
+
+    let res;
+    if (lock) {
+      // Lock room
+      res = await axios.post(`${API_BASE}/rooms/${roomId}/lock`, null, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } else {
+      // Unlock room
+      res = await axios.put(`${API_BASE}/rooms/${roomId}/unlock`, null, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    }
+
+    // Cập nhật state
+    setSelectedRoom(prev => prev ? { ...prev, is_locked: lock } : prev);
+    setMyRooms(prev => prev.map(r => r.id === roomId ? { ...r, is_locked: lock } : r));
+    setPublicRooms(prev => prev.map(r => r.id === roomId ? { ...r, is_locked: lock } : r));
+
+    toast.success(res.data.message || `Phòng đã ${lock ? 'khóa' : 'mở khóa'}`);
+  } catch (err: any) {
+    if (err.response?.status === 401) toast.error("Bạn phải đăng nhập để thực hiện hành động này");
+    else if (err.response?.status === 403) toast.error("Bạn không có quyền thực hiện hành động này");
+    else if (err.response?.status === 404) toast.error("Phòng không tồn tại");
+    else toast.error(err.response?.data?.error || "Không thể thay đổi trạng thái phòng");
+  } finally {
+    setIsLocking(false);
+  }
+};
+
+
+
+
+
     // ================= FETCH ROOMS =================
     const fetchRooms = async () => {
         try {
@@ -986,29 +1032,79 @@ const RoomPage = () => {
 
 
                                         {/* SECURITY TAB */}
-                                        <TabsContent value="security" className="space-y-4">
-                                            <div className="flex items-center gap-2">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={selectedRoom.khoa ?? false}
-                                                    onChange={async (e) => {
-                                                        if (e.target.checked) {
-                                                            const newPass = prompt("Nhập mật khẩu mới:");
-                                                            if (newPass) {
-                                                                await setRoomPasswordAPI(selectedRoom.id, token!, newPass);
-                                                                toast.success("Đã đặt mật khẩu");
-                                                                fetchRooms();
-                                                            }
-                                                        } else {
-                                                            await removeRoomPasswordAPI(selectedRoom.id, token!);
-                                                            toast.success("Đã gỡ mật khẩu");
-                                                            fetchRooms();
-                                                        }
-                                                    }}
-                                                />
-                                                <span className="text-sm">Khóa phòng (mật khẩu)</span>
-                                            </div>
-                                        </TabsContent>
+<TabsContent value="security" className="space-y-4">
+  {/* Lock/Unlock (owner-only) */}
+  {selectedRoom?.isMine && (
+    <div className="flex items-center gap-2">
+      <input
+        type="checkbox"
+        checked={selectedRoom.is_locked ?? false}
+        onChange={async (e) => {
+          if (!selectedRoom) return;
+          try {
+            // Lock/unlock room API
+            await handleLockRoom(selectedRoom.id, e.target.checked);
+          } catch {
+            toast.error("Không thể thay đổi trạng thái khóa phòng");
+          }
+        }}
+      />
+      <span className="text-sm">Khóa phòng (chỉ owner mới vào)</span>
+    </div>
+  )}
+
+  {/* Password lock (owner-only) */}
+  {selectedRoom?.isMine && (
+    <div className="flex items-center gap-2 mt-2">
+      <input
+        type="checkbox"
+        checked={selectedRoom.khoa ?? false} // trạng thái password lock
+        onChange={async (e) => {
+          if (!selectedRoom) return;
+
+          if (e.target.checked) {
+            const newPass = prompt("Nhập mật khẩu mới:");
+            if (!newPass) return;
+
+            try {
+              await setRoomPasswordAPI(selectedRoom.id, token!, newPass);
+              toast.success("Đã đặt mật khẩu");
+              fetchRooms(); // cập nhật danh sách phòng
+            } catch {
+              toast.error("Không thể đặt mật khẩu");
+            }
+          } else {
+            try {
+              await removeRoomPasswordAPI(selectedRoom.id, token!);
+              toast.success("Đã gỡ mật khẩu");
+              fetchRooms(); // cập nhật danh sách phòng
+            } catch {
+              toast.error("Không thể gỡ mật khẩu");
+            }
+          }
+        }}
+      />
+      <span className="text-sm">Khóa phòng bằng mật khẩu</span>
+    </div>
+  )}
+
+  {/* Thông báo cho người không phải owner */}
+  {!selectedRoom?.isMine && (
+    <div className="text-sm text-muted-foreground">
+      {selectedRoom?.is_locked
+        ? "Phòng đang bị khóa, chỉ owner mới có thể vào"
+        : selectedRoom?.khoa
+        ? "Phòng có mật khẩu, bạn cần nhập mật khẩu để tham gia"
+        : "Bạn không có quyền chỉnh sửa bảo mật phòng"}
+    </div>
+  )}
+</TabsContent>
+
+
+
+
+
+
                                     </Tabs>
                                 </>
                             )}

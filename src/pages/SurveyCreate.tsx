@@ -12,6 +12,9 @@ import { toast } from "sonner";
 import { createSurveyAPI, addQuestionAPI } from "@/api/Api";
 import Header from "@/components/Header";
 import { Image } from "lucide-react"; // 🟢 icon hình ảnh
+import axios from "axios";
+
+import { shareFormAPI } from "@/api/Api";
 
 interface Question {
   id: string;
@@ -137,8 +140,8 @@ const SurveyCreate = () => {
       const formId = newSurvey.ID || newSurvey.id;
       if (!formId) throw new Error("Không lấy được ID khảo sát");
 
-      console.log("✅ [saveSurvey] Survey created:", newSurvey);
-      console.log("📌 [saveSurvey] formId gửi lên:", formId);
+      console.log(" [saveSurvey] Survey created:", newSurvey);
+      console.log(" [saveSurvey] formId gửi lên:", formId);
 
       // Luôn lấy edit_token từ response để gửi khi thêm câu hỏi
       const editToken = newSurvey.edit_token;
@@ -177,12 +180,40 @@ const SurveyCreate = () => {
       }
 
       toast.success("🎉 Đã lưu khảo sát và câu hỏi vào database!");
-      const link = `${window.location.origin}/survey/${formId}`;
-      setSurveyLink(link);
-      console.log("📌 [saveSurvey] Survey link:", link);
+      // const link = `${window.location.origin}/survey/${formId}`;
+// const link = `https://survey-server-m884.onrender.com/surveyapp/survey/${formId}`;
+// const link = `${window.location.origin}/surveyapp/survey/${formId}`;
+//     setSurveyLink(link);
+//     console.log("📌 Survey link:", link);
+// Giả sử gọi API tạo share link
+// ===== tạo share link trên backend =====
+const shareRes = await axios.post(
+  `https://survey-server-m884.onrender.com/api/forms/${formId}/share`,
+  {},
+  { headers: { Authorization: `Bearer ${token}` } }
+);
+
+// 1️⃣ Lấy shareToken từ share_url
+const shareToken = shareRes.data.share_url.split("/").pop();
+if (!shareToken) throw new Error("Không lấy được share token từ backend");
+
+// 2️⃣ Tạo link FE đầy đủ
+const FE_BASE = `${window.location.origin}/surveyapp`; // FE base path
+const surveyFEUrl = `${FE_BASE}/survey/${shareToken}`;
+setSurveyLink(surveyFEUrl);
+
+console.log(" Link FE đầy đủ:", surveyFEUrl);
+
+// 3️⃣ Lấy embed code, đổi localhost sang backend nếu cần
+const baseUrl = "https://survey-server-m884.onrender.com";
+const embedCode = shareRes.data.embed_code.replace("http://localhost:8080", baseUrl);
+
+console.log("📌 Embed code:", embedCode);
+
+
 
     } catch (err: any) {
-      console.error("❌ [saveSurvey] Save survey error:", {
+      console.error(" [saveSurvey] Save survey error:", {
         status: err.status,
         data: err.data,
         message: err.message,
@@ -522,22 +553,13 @@ const SurveyCreate = () => {
               </DialogContent>
             </Dialog>
             {surveyLink && (
-              <div className="p-4 border rounded bg-green-50 text-green-700 flex flex-col sm:flex-row gap-2">
-                <p className="flex-1">Khảo sát đã tạo thành công!</p>
-                <div className="flex gap-2 items-center">
-                  <input readOnly value={surveyLink} className="border px-2 py-1 rounded w-64 text-sm" />
-                  <button
-                    className="bg-primary text-white px-3 py-1 rounded"
-                    onClick={() => {
-                      navigator.clipboard.writeText(surveyLink);
-                      toast.success("Đã sao chép link!");
-                    }}
-                  >
-                    Sao chép
-                  </button>
-                </div>
-              </div>
-            )}
+        <div className="mt-4">
+          <p className="font-semibold">Link khảo sát:</p>
+          <a href={surveyLink} target="_blank" rel="noreferrer" className="text-blue-500 underline">
+            {surveyLink}
+          </a>
+        </div>
+      )}
             <Button onClick={saveSurvey}>
               <Save className="h-4 w-4 mr-2" />
               Lưu khảo sát

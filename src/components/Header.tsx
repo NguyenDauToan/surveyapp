@@ -1,26 +1,20 @@
 import { Button } from "@/components/ui/button";
-import { Menu, X, LogOut, Settings, Plus, ArchiveIcon } from "lucide-react";
+import { Menu, X, LogOut } from "lucide-react";
 import { useState } from "react";
 import LoginDialog from "@/layout/LoginDialog";
 import MySurveys from "@/pages/MySurveys";
+import UserProfileModal from "@/components/UserProfileModal"; // import modal
 import { useSelector, useDispatch } from "react-redux";
 import { RootState } from "@/redux/store";
 import { logout } from "@/redux/authSlice";
 import { Link } from "react-router-dom";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import ArchiveDialog from "@/pages/ArchivedRoomsDialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [isMySurveyOpen, setIsMySurveyOpen] = useState(false);
-  const [isArchiveOpen, setIsArchiveOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false); // ⚡ thêm state cho UserProfileModal
 
   const dispatch = useDispatch();
   const { user } = useSelector((state: RootState) => state.auth);
@@ -43,31 +37,36 @@ const Header = () => {
           <span className="font-bold text-xl text-foreground">SurveyPro</span>
         </Link>
 
-        {/* Desktop Nav */}
-        
         {/* Actions */}
         <div className="flex items-center gap-3">
           {!user ? (
-            <>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="hidden md:inline-flex"
-                onClick={() => setIsLoginOpen(true)}
-              >
-                Đăng nhập
-              </Button>
-          
-            </>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="hidden md:inline-flex"
+              onClick={() => setIsLoginOpen(true)}
+            >
+              Đăng nhập
+            </Button>
           ) : (
-            <div className="flex items-center gap-3">
-              <span className="text-sm font-medium text-foreground">
-                👋 Xin chào: {user.Ten || "User"}
-              </span>
-              <Button variant="ghost" size="icon" onClick={handleLogout}>
-                <LogOut className="h-4 w-4" />
-              </Button>
-            </div>
+            <>
+              <div className="flex items-center gap-3">
+                <span
+                  className="text-sm font-medium text-foreground cursor-pointer"
+                  onClick={() => setProfileOpen(true)}
+                >
+                  👋 Xin chào: {user.Ten || "User"}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setProfileOpen(true)}
+                >
+                  <LogOut className="h-4 w-4" />
+                </Button>
+              </div>
+              <UserProfileModal open={profileOpen} onOpenChange={setProfileOpen} />
+            </>
           )}
 
           {/* Mobile menu button */}
@@ -109,20 +108,17 @@ const Header = () => {
             </Link>
 
             {!user ? (
-              <>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="w-full justify-start"
-                  onClick={() => {
-                    setIsMenuOpen(false);
-                    setIsLoginOpen(true);
-                  }}
-                >
-                  Đăng nhập
-                </Button>
-               
-              </>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full justify-start"
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  setIsLoginOpen(true);
+                }}
+              >
+                Đăng nhập
+              </Button>
             ) : (
               <Button
                 variant="ghost"

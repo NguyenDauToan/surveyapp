@@ -401,4 +401,112 @@ export const removeMemberAPI = async (roomId: number, token: string, member: str
   );
   return res.data;
 };
+
+
+
+// Tạo link chia sẻ form
+export const shareFormAPI = async (formId: string, token: string) => {
+  try {
+    const res = await axiosClient.post(`/forms/${formId}/share`, {}, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return res.data; // { embed_code, share_url }
+  } catch (err: any) {
+    console.error(err.response?.data);
+    throw new Error(err.response?.data?.message || "Không thể tạo link chia sẻ");
+  }
+};
+
+// Lấy form công khai (không cần token)
+export const getPublicFormAPI = async (shareToken: string) => {
+  try {
+    const res = await axiosClient.get(`/forms/public/${shareToken}`);
+    return res.data;
+  } catch (err: any) {
+    console.error(err.response?.data);
+    throw new Error(err.response?.data?.message || "Không thể tải form");
+  }
+};
+
+// Gửi câu trả lời
+export const submitAnswersAPI = async (formId: number, answers: any[]) => {
+  try {
+    const res = await axiosClient.post(`/forms/${formId}/answers`, { answers });
+    return res.data;
+  } catch (err: any) {
+    console.error(err.response?.data);
+    throw new Error(err.response?.data?.message || "Không thể gửi câu trả lời");
+  }
+};
+// =================getFormDashboardAPI================
+export const getFormDashboardAPI = async (formId: number, token: string) => {
+  try {
+    const res = await axiosClient.get(`/forms/${formId}/dashboard`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return res.data;
+  } catch (err: any) {
+    console.error(err.response?.data);
+    throw new Error(err.response?.data?.message || "Không thể tải dashboard");
+  }
+};
+
+// Lấy chi tiết submission
+export const getSubmissionDetailAPI = async (
+  formId: number,
+  subId: number,
+  token: string
+) => {
+  try {
+    const res = await axiosClient.get(
+      `/forms/${formId}/submissions/${subId}`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+    return res.data;
+  } catch (err: any) {
+    console.error(err.response?.data);
+    throw new Error(
+      err.response?.data?.error || "Không thể tải chi tiết phản hồi"
+    );
+  }
+};
+// src/api/Api.ts
+interface GetFormSubmissionsParams {
+  page?: number;
+  limit?: number;
+  start_date?: string;
+  end_date?: string;
+}
+
+export const getFormSubmissionsAPI = async (
+  formId: number,
+  token: string,
+  page: number = 1,
+  limit: number = 10,
+  start_date?: string,
+  end_date?: string
+) => {
+  try {
+    const params: GetFormSubmissionsParams = { page, limit };
+    if (start_date) params.start_date = start_date;
+    if (end_date) params.end_date = end_date;
+
+    const res = await axiosClient.get(`/forms/${formId}/submissions`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      params,
+    });
+
+    return res.data; // { form_id, limit, page, submissions, total }
+  } catch (err: any) {
+    console.error(err.response?.data);
+    throw new Error(
+      err.response?.data?.error || "Không thể lấy danh sách phản hồi"
+    );
+  }
+};
+
 export default axiosClient;
