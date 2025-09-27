@@ -75,7 +75,6 @@ const FormDetail = ({ id, open, onOpenChange }: Props) => {
       toast.error("Vui lòng điền đầy đủ thông tin");
       return;
     }
-
     try {
       await updateForm(id, { title, description }, token);
       toast.success("Cập nhật khảo sát thành công");

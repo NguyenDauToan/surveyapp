@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { getFormDetail, updateForm, deleteForm } from "@/api/Api";
+import { getFormDetail, updateForm, deleteForm } from "@/api/Api"; // đã lấy API từ .env
 import { Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -44,7 +44,8 @@ export default function MySurveys() {
     try {
       const token = localStorage.getItem("token");
       if (!token) return toast.error("Bạn cần đăng nhập để xem khảo sát");
-      // ⚡ Hardcode id để test
+
+      // ⚡ Hardcode id để test (sau này thay = props hoặc params)
       const id = 1;
       const data = await getFormDetail(id, token);
       setSurvey(data);

@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2, Copy, Edit, Users } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
-import { archiveRoomAPI, removeRoomPasswordAPI, setRoomPasswordAPI, updateRoomAPI } from "@/api/Api";
+import { archiveRoomAPI, getRoomDetailAPI, removeRoomPasswordAPI, setRoomPasswordAPI, updateRoomAPI } from "@/api/Api";
 import "../styles/Room.css"
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
@@ -31,16 +31,13 @@ interface Member {
     name: string;    // tên người dùng (Google name)
     email: string;   // email
 }
-
-interface RoomInvite {
+interface KhaoSatSummary {
     id: number;
-    room_id: number;
-    room_name: string;
-    inviter_name: string;
-    status: "pending" | "accepted" | "declined";
-    created_at: string;
-
+    tieu_de: string;
+    mo_ta?: string;
+    public_link?: string | null;
 }
+
 interface Room {
     id: number;
     nguoi_tao_id?: string;
@@ -53,6 +50,8 @@ interface Room {
     khoa?: boolean;
     mat_khau?: string;
     members?: Member[];
+    khao_sat?: KhaoSatSummary;   // 👈 Thêm chỗ này
+
 }
 interface RoomWithIsMine extends Room {
     isMine?: boolean;
@@ -69,19 +68,12 @@ const RoomPage = () => {
     const [archiveDialogRoom, setArchiveDialogRoom] = useState<Room | null>(null);
     const token = localStorage.getItem("token");
     const userId = localStorage.getItem("user_id") || "";
-    const API_BASE = "https://survey-server-m884.onrender.com/api";
-    const [inviteInput, setInviteInput] = useState("");
+    const API_BASE = "http://localhost:8080/api";
     const [selectedRoom, setSelectedRoom] = useState<RoomWithIsMine | null>(null);
     const [members, setMembers] = useState<Member[]>([]);
     const [showInviteDialog, setShowInviteDialog] = useState(false);
-    const [invites, setInvites] = useState<RoomInvite[]>([]);
-    const [pendingInvitesCount, setPendingInvitesCount] = useState(0);
-    const [pendingInvitesSent, setPendingInvitesSent] = useState<RoomInvite[]>([]);
     const [membersLoading, setMembersLoading] = useState(false); // 👈 Thêm loading cho members
-
-    const updatePendingCount = (invitesList: RoomInvite[]) => {
-        setPendingInvitesCount(invitesList.filter(i => i.status === "pending").length);
-    };
+    const [joinRoomURL, setJoinRoomURL] = useState("");
     const fetchMembers = async (roomId: number) => {
         if (!token) return;
         try {
@@ -91,10 +83,85 @@ const RoomPage = () => {
             toast.error("Không lấy được danh sách thành viên");
         }
     };
+    const checkRoomExists = async (roomId) => {
+        try {
+            const response = await axios.get(`${API_BASE}/rooms/${roomId}`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            return response.data; // Nếu phòng tồn tại, trả về dữ liệu phòng
+        } catch (error) {
+            console.error("Phòng không tồn tại:", error.response.data);
+            return null; // Nếu phòng không tồn tại, trả về null
+        }
+    };
+    const handleJoinRoomByURL = async () => {
+        if (!joinRoomURL) {
+            return toast.error("Vui lòng nhập URL phòng");
+        }
+
+        // Tìm UUID từ URL
+        const roomIdMatch = joinRoomURL.match(
+            /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i
+        );
+        if (!roomIdMatch) {
+            return toast.error("URL không hợp lệ");
+        }
+
+        const roomId = roomIdMatch[0];
+        try {
+            // Check room tồn tại
+            const roomData = await checkRoomExists(roomId);
+            if (!roomData) {
+                return toast.error("ID phòng không hợp lệ.");
+            }
+
+            // Check đã là thành viên chưa
+            const existingMemberResponse = await axios.get(
+                `${API_BASE}/rooms/${roomId}/participants`,
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            const existingMembers = existingMemberResponse.data.participants;
+            const isAlreadyMember = existingMembers.some(
+                (member: any) => String(member.id) === String(userId)
+            );
+            if (isAlreadyMember) {
+                return toast.error("Bạn đã là thành viên trong phòng này.");
+            }
+
+            // Nếu có mật khẩu thì hỏi
+            let password: string | undefined;
+            if (roomData.khoa) {
+                password = prompt("Nhập mật khẩu phòng:");
+                if (!password) return toast.error("Bạn chưa nhập mật khẩu");
+            }
+
+            // Gọi API join
+            const response = await axios.post(
+                `${API_BASE}/rooms/${roomId}/enter`,
+                { password },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+
+            const updatedRoom = response.data.room;
+
+            // ✅ Cập nhật danh sách phòng
+            setMyRooms((prev) => {
+                const exists = prev.find((r) => r.id === updatedRoom.id);
+                if (exists) return prev;
+                return [...prev, { ...updatedRoom }]; // thêm thẳng vào list
+            });
+
+            toast.success("Bạn đã tham gia phòng thành công");
+            setJoinRoomURL(""); // Reset input
+        } catch (error) {
+            console.error("Lỗi khi tham gia phòng:", error);
+            toast.error("Không thể tham gia phòng, vui lòng kiểm tra lại URL");
+        }
+    };
     const fetchPublicRooms = async () => {
         try {
             const res = await axios.get(`${API_BASE}/lobby`);
-            const rooms: Room[] = res.data.data || [];
+            const rooms: Room[] = res.data.data || res.data.rooms || []; // 👈 lấy đồng thời cả 2 khả năng
             const roomsWithMembers = await Promise.all(
                 rooms
                     .filter(r => r.trang_thai !== "archived" && r.is_public)
@@ -121,136 +188,18 @@ const RoomPage = () => {
             console.error("Lỗi khi fetch public rooms:", err);
         }
     };
-    const fetchInvites = async (roomId: number) => {
-        if (!token) {
-            console.log("❌ fetchInvites: Không có token");
-            return;
-        }
-        console.log("🔹 fetchInvites: Bắt đầu fetch invites cho roomId =", roomId);
-        try {
-            const res = await axios.get(`${API_BASE}/room-invites/${roomId}/invites`, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
 
-            console.log("🔹 fetchInvites: Response data raw:", res.data);
-            const invitesList =
-                res.data.invites ||
-                (res.data.invite ? [res.data.invite] : []) ||
-                [];
-
-            console.log("🔹 fetchInvites: invitesList sau xử lý:", invitesList);
-            setInvites(invitesList);
-        } catch (err: any) {
-            console.error("❌ Lỗi fetch invites:", err.response?.data || err.message);
-            toast.error("Không thể lấy danh sách lời mời");
-        }
-    };
-    const handleSendInvite = async () => {
-        if (!selectedRoom || !inviteInput || !token) return;
-
-        try {
-            const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
-
-            // Kiểm tra quyền gửi lời mời
-            if (String(selectedRoom.owner_id || selectedRoom.nguoi_tao_id) !== String(storedUser.id)) {
-                return toast.error("Bạn không có quyền gửi lời mời trong phòng này");
-            }
-
-            // Lấy thông tin người được mời
-            const userRes = await getUserByEmailOrUsername(inviteInput, token);
-            const invitee = userRes.data.user;
-
-            if (!invitee) return toast.error("Không tìm thấy người dùng với email này");
-
-            const inviteRes = await axios.post(
-                `${API_BASE}/room-invites/${selectedRoom.id}/invite`,
-                { user_id: invitee.id, email: inviteInput },
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
-
-            // Kiểm tra phản hồi từ API
-            if (inviteRes.status === 200) {
-                toast.success(inviteRes.data.message || "Đã gửi lời mời thành công");
-                setInviteInput(""); // Xóa input sau khi gửi
-
-                // Cập nhật danh sách lời mời đã gửi
-                setPendingInvitesSent(prev => [
-                    ...prev,
-                    {
-                        id: inviteRes.data.invite.id,
-                        room_id: selectedRoom.id,
-                        room_name: selectedRoom.ten_room,
-                        inviter_name: storedUser.name,
-                        status: "pending",
-                        created_at: new Date().toISOString(),
-                    },
-                ]);
-                await fetchMembers(selectedRoom.id); // Làm mới danh sách thành viên
-            } else {
-                toast.error("Không thể gửi lời mời");
-            }
-        } catch (err) {
-            console.error("❌ Lỗi gửi lời mời:", err.response?.data || err.message);
-            if (err.response?.data?.error === "Đã gửi lời mời cho người dùng này") {
-                toast.info("Người dùng này đã được mời từ trước", { duration: 1000 });
-            } else {
-                toast.error(err.response?.data?.error || "Không thể gửi lời mời");
-            }
-        }
-    };
-    const handleRespondInvite = async (inviteId: number, status: "accepted" | "declined") => {
-        if (!token) return;
-        try {
-            const payload = { status: status === "declined" ? "rejected" : status };
-            const res = await axios.put(`${API_BASE}/room-invites/${inviteId}/respond`, payload, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            toast.success(res.data.message || "Đã phản hồi lời mời");
-            setInvites(prev =>
-                prev.map(inv => inv.id === inviteId ? { ...inv, status } : inv)
-            );
-            if (status === "accepted" && selectedRoom) {
-                const res = await getRoomParticipantsAPI(selectedRoom.id, token);
-                setMembers(res.data.participants);
-                setSelectedRoom(prev => prev ? { ...prev, members: res.data.participants } : prev);
-            }
-        } catch (err: any) {
-            toast.error(err.response?.data?.error || "Không thể phản hồi lời mời");
-        }
-    };
-    useEffect(() => {
-        if (!showInviteDialog || !selectedRoom || !token) return;
-        console.log("🔹 fetchInvites: Bắt đầu fetch invites cho roomId =", selectedRoom.id);
-        const fetchData = async () => {
-            try {
-                const res = await axios.get(`${API_BASE}/room-invites/${selectedRoom.id}/invites`, {
-                    headers: { Authorization: `Bearer ${token}` },
-                });
-                console.log("🔹 fetchInvites: Response data raw: ", res.data);
-                const invitesList =
-                    res.data.invites ||
-                    (res.data.invite ? [res.data.invite] : []) ||
-                    [];
-                console.log("🔹 fetchInvites: invitesList sau xử lý: ", invitesList);
-                setInvites(invitesList);
-                if (!invitesList.length) {
-                    console.warn("⚠️ fetchInvites: Không có lời mời nào trả về");
-                }
-            } catch (err: any) {
-                console.error("❌ Lỗi fetch invites:", err.response?.data || err.message);
-                toast.error("Không thể lấy danh sách lời mời");
-            }
-        };
-        fetchData();
-    }, [showInviteDialog, selectedRoom, token]);
     const fetchRooms = async () => {
         if (!token) return;
         try {
             const resMy = await axios.get(`${API_BASE}/rooms`, { headers: { Authorization: `Bearer ${token}` } });
             const resPublic = await axios.get(`${API_BASE}/lobby`);
+
             const myData: Room[] = resMy.data.data || [];
-            const publicData: Room[] = resPublic.data.rooms || [];
+            const publicData: Room[] = resPublic.data.data || resPublic.data.rooms || []; // 👈 sửa lại
+
             const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+
             const myRoomsWithMembers: Room[] = await Promise.all(
                 myData.map(async r => {
                     try {
@@ -268,11 +217,12 @@ const RoomPage = () => {
                     }
                 })
             );
+
             const publicRoomsWithMembers: Room[] = await Promise.all(
                 publicData.map(async r => {
                     try {
                         const resMembers = await axios.get(`${API_BASE}/rooms/${r.id}/participants`, {
-                            headers: { Authorization: `Bearer ${token}` }, // gửi token nếu backend cần
+                            headers: { Authorization: `Bearer ${token}` },
                         });
                         return {
                             ...r,
@@ -286,18 +236,21 @@ const RoomPage = () => {
                     }
                 })
             );
+
             setMyRooms(myRoomsWithMembers);
             setPublicRooms(publicRoomsWithMembers);
+
             if (selectedRoom) {
                 const updated = [...myRoomsWithMembers, ...publicRoomsWithMembers].find(r => r.id === selectedRoom.id);
                 if (updated) setSelectedRoom({ ...updated, isMine: selectedRoom.isMine });
-                setMembers(updated.members || []); // 👈 thêm dòng này
+                setMembers(updated?.members || []);
             }
         } catch (err: any) {
             toast.error(err.response?.data?.message || "Không lấy được danh sách phòng");
             console.error(err);
         }
     };
+
     useEffect(() => {
         if (!selectedRoom) return;
         setMembers(selectedRoom.members || []);
@@ -333,21 +286,25 @@ const RoomPage = () => {
                 },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
-            const roomId = res.data.data.id;
-            if (newRoom.khoa && newRoom.mat_khau.trim()) {
-                await setRoomPasswordAPI(roomId, token, newRoom.mat_khau);
-            }
+
+            const roomId = res.data.data.id; // Lấy ID phòng từ phản hồi
+            const surveyUrl = res.data.data.khao_sat?.public_link; // Lấy URL khảo sát từ phản hồi
+
             const newCreatedRoom: Room = {
                 id: roomId,
                 ten_room: newRoom.ten_room,
                 mo_ta: newRoom.mo_ta,
                 is_public: newRoom.is_public,
-                khoa: newRoom.khoa,
-                mat_khau: newRoom.mat_khau,
                 nguoi_tao_id: userId,
                 trang_thai: "active",
                 ngay_tao: new Date().toISOString(),
-                share_url: `${window.location.origin}/room/${roomId}`,
+                share_url: `${window.location.origin}/room/${roomId}`, // Gán URL chia sẻ
+                khao_sat: {
+                    id: res.data.data.khao_sat?.id,
+                    tieu_de: res.data.data.khao_sat?.tieu_de,
+                    mo_ta: res.data.data.khao_sat?.mo_ta,
+                    public_link: surveyUrl, // Lưu URL khảo sát
+                },
                 members: [
                     {
                         id: userId,
@@ -356,6 +313,7 @@ const RoomPage = () => {
                     }
                 ],
             };
+
             setMyRooms(prev => [newCreatedRoom, ...prev]);
             if (newRoom.is_public) {
                 setPublicRooms(prev => [newCreatedRoom, ...prev]);
@@ -417,11 +375,26 @@ const RoomPage = () => {
                 toast.error("Sao chép thất bại");
             });
     };
-    useEffect(() => {
-        if (!selectedRoom || !token) return;
-        const interval = setInterval(() => fetchInvites(selectedRoom.id), 10000); // 10s
-        return () => clearInterval(interval);
-    }, [selectedRoom, token]);
+    const handleOpenRoom = async (room: Room) => {
+        if (!token) return;
+    
+        try {
+            const detail = await getRoomDetailAPI(room.id, token);
+    
+            const fullRoom: RoomWithIsMine = {
+                ...room,
+                ...detail.data,
+                khao_sat: detail.data.khao_sat ?? null,
+                isMine: String(room.nguoi_tao_id) === String(userId),
+            };
+    
+            setSelectedRoom(fullRoom);
+            setMembers(detail.data.members || []);
+        } catch (err: any) {
+            toast.error(err.message || "Không lấy được chi tiết phòng");
+        }
+    };
+
     const enterRoom = async (room: Room) => {
         if (!token) return toast.error("Bạn phải đăng nhập để tham gia phòng");
         let password: string | undefined;
@@ -430,20 +403,20 @@ const RoomPage = () => {
                 password = prompt("Nhập mật khẩu phòng:");
                 if (!password) return toast.error("Bạn chưa nhập mật khẩu");
             }
-            
+
             const res = await enterRoomAPI(room.id, password, token);
-    
+
             // Kiểm tra phản hồi từ API
             if (res && res.data && res.data.room) {
                 toast.success("Bạn đã tham gia phòng thành công");
                 const members = res.data.room.members || []; // Sử dụng danh sách thành viên trả về từ backend
                 const updatedRoom: Room = { ...res.data.room, members };
-    
+
                 setMyRooms(prev => {
                     const exist = prev.find(r => r.id === updatedRoom.id);
                     return exist ? prev.map(r => r.id === updatedRoom.id ? updatedRoom : r) : [...prev, updatedRoom];
                 });
-    
+
                 setPublicRooms(prev => prev.map(r => r.id === updatedRoom.id ? updatedRoom : r));
                 setSelectedRoom({ ...updatedRoom, isMine: true });
                 setMembers(members); // Cập nhật danh sách thành viên trong trạng thái
@@ -495,59 +468,22 @@ const RoomPage = () => {
                             <Dialog open={showInviteDialog} onOpenChange={setShowInviteDialog}>
                                 <DialogTrigger asChild>
                                     <Button className="relative flex items-center gap-2" variant="outline">
-                                        <Users className="h-4 w-4" /> Lời mời
-                                        {pendingInvitesCount > 0 && (
-                                            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs w-4 h-4 rounded-full flex items-center justify-center">
-                                                {pendingInvitesCount}
-                                            </span>
-                                        )}
+                                        <Users className="h-4 w-4" /> Tham gia phòng
                                     </Button>
                                 </DialogTrigger>
                                 <DialogContent className="max-w-md">
                                     <DialogHeader>
-                                        <DialogTitle>Lời mời tham gia phòng</DialogTitle>
+                                        <DialogTitle>Tham gia phòng</DialogTitle>
                                         <DialogDescription>
-                                            Xem danh sách lời mời và chấp nhận hoặc từ chối
+                                            Nhập URL phòng để tham gia
                                         </DialogDescription>
                                     </DialogHeader>
-                                    <div className="space-y-2 mt-4">
-                                        {invites.length === 0 && pendingInvitesSent.length === 0 ? (
-                                            <p className="text-sm text-muted-foreground">Chưa có lời mời nào</p>
-                                        ) : (
-                                            <>
-                                                {invites.map(invite => (
-                                                    <div key={invite.id} className={`flex justify-between items-center p-2 rounded-lg ${invite.status === "pending" ? "bg-muted/30" : "bg-green-100"}`}>
-                                                        <div>
-                                                            <p className="font-medium">{invite.room_name}</p>
-                                                            <p className="text-xs text-muted-foreground">
-                                                                Mời bởi: {invite.inviter_name} | Trạng thái: {invite.status}
-                                                            </p>
-                                                        </div>
-                                                        {invite.status === "pending" && (
-                                                            <div className="flex gap-2">
-                                                                <Button size="sm" onClick={() => handleRespondInvite(invite.id, "accepted")}>
-                                                                    Chấp nhận
-                                                                </Button>
-                                                                <Button size="sm" variant="outline" onClick={() => handleRespondInvite(invite.id, "declined")}>
-                                                                    Từ chối
-                                                                </Button>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                ))}
-                                                {pendingInvitesSent.map(invite => (
-                                                    <div key={invite.id} className="flex justify-between items-center p-2 rounded-lg bg-yellow-100">
-                                                        <div>
-                                                            <p className="font-medium">{invite.room_name}</p>
-                                                            <p className="text-xs text-muted-foreground">
-                                                                Mời bởi: {invite.inviter_name} | Trạng thái: {invite.status} (chưa phản hồi)
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </>
-                                        )}
-                                    </div>
+                                    <Input
+                                        placeholder="Nhập URL phòng"
+                                        value={joinRoomURL}
+                                        onChange={(e) => setJoinRoomURL(e.target.value)}
+                                    />
+                                    <Button onClick={handleJoinRoomByURL} className="mt-4">Tham gia</Button>
                                 </DialogContent>
                             </Dialog>
                         </div>
@@ -673,7 +609,7 @@ const RoomPage = () => {
                                                     onClick={(e) => {
                                                         if ((e.target as HTMLElement).closest(".no-detail")) return;
                                                         if (archiveDialogRoom) return; // 🔹 không mở chi tiết khi dialog lưu trữ đang mở
-                                                        setSelectedRoom({ ...room, isMine: true }); // 👈 thêm isMine
+                                                        handleOpenRoom(room); // 👈 thêm isMine
                                                     }} >
                                                     <CardHeader>
                                                         <div className="flex justify-between items-start">
@@ -922,7 +858,22 @@ const RoomPage = () => {
                                                     {selectedRoom.is_public ? "Công khai" : "Riêng tư"}
                                                 </Badge>
                                             </div>
+                                            {/* Link khảo sát */}
+                                            {selectedRoom.khao_sat?.public_link && (
+                                                <div className="flex justify-between items-center">
+                                                    <Badge variant="outline">{selectedRoom.khao_sat.public_link}</Badge>
+                                                    <Button
+                                                        onClick={() => copyInviteCode(selectedRoom.khao_sat.public_link!)}
+                                                        variant="ghost"
+                                                        size="sm"
+                                                    >
+                                                        <Copy className="h-3 w-3" />
+                                                    </Button>
+                                                </div>
+                                            )}
+
                                             {/* Link chia sẻ */}
+
                                             <div>
                                                 <p className="text-sm font-medium text-muted-foreground mb-2">Liên kết mời</p>
                                                 <div className="flex items-center justify-between rounded-lg border px-3 py-2 bg-muted/50">
@@ -947,35 +898,7 @@ const RoomPage = () => {
                                         <TabsContent value="members" className="space-y-3">
                                             <div className="flex items-center justify-between mb-2">
                                                 <p className="text-sm font-medium text-muted-foreground">Thành viên</p>
-                                                {selectedRoom?.isMine && (
-                                                    <Dialog>
-                                                        <DialogTrigger asChild>
-                                                            <Button size="sm" variant="outline" className="text-xs">
-                                                                + Thêm
-                                                            </Button>
-                                                        </DialogTrigger>
-                                                        <DialogContent className="max-w-sm rounded-xl">
-                                                            <DialogHeader>
-                                                                <DialogTitle>Thêm thành viên</DialogTitle>
-                                                                <DialogDescription>
-                                                                    Nhập email hoặc username để mời tham gia phòng.
-                                                                </DialogDescription>
-                                                            </DialogHeader>
-                                                            <div className="flex gap-2">
-                                                                <Input
-                                                                    placeholder="Nhập email hoặc username..."
-                                                                    value={inviteInput}
-                                                                    onChange={(e) => setInviteInput(e.target.value)}
-                                                                />
-                                                                <Button onClick={handleSendInvite}>
-                                                                    Mời
-                                                                </Button>
 
-                                                            </div>
-
-                                                        </DialogContent>
-                                                    </Dialog>
-                                                )}
                                             </div>
                                             <div className="space-y-2">
                                                 {members.length > 0 ? (

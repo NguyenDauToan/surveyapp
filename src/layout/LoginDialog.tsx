@@ -37,31 +37,27 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const googleButtonRef = useRef<HTMLDivElement | null>(null);
-
+  const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8080/api";
   const handleCredentialResponse = async (response: GoogleCredentialResponse) => {
     console.log("Credential response:", response);
     if (!response.credential) return console.error("❌ Không nhận được ID Token từ Google");
-  
+
     try {
-      const res = await fetch(
-        "https://survey-server-m884.onrender.com/api/auth/google/login",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id_token: response.credential }),
-        }
-      );
-  
+      const res = await fetch(`${API_BASE}/auth/google/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id_token: response.credential }),
+      });
+
       if (!res.ok) {
         const err = await res.text();
         console.error("Backend error:", err);
         throw new Error(err);
       }
-  
+
       const data = await res.json();
-  
+
       if (data.user && data.token) {
-        // Chuẩn hóa user object
         const user = {
           id: data.user.id,
           ten: data.user.ten,
@@ -70,19 +66,16 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
           ngay_tao: data.user.ngay_tao,
           role: data.user.vai_tro ? "admin" : "user",
         };
-  
-        // Cập nhật redux
+
         dispatch(login({ user, token: data.token }));
-  
-        // Lưu localStorage
+
         localStorage.setItem("token", data.token);
         localStorage.setItem("user", JSON.stringify(user));
         localStorage.setItem("user_id", String(user.id));
-  
-        // Điều hướng
+
         if (user.role === "admin") navigate("/admin");
         else navigate("/");
-  
+
         onOpenChange(false);
       } else {
         alert("Đăng nhập thất bại");
@@ -92,8 +85,7 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
       alert("Lỗi khi đăng nhập Google");
     }
   };
-  
-  
+
   useEffect(() => {
     if (!open) return;
 
@@ -109,7 +101,7 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 
         const script = document.createElement("script");
         script.src = "https://accounts.google.com/gsi/client";
-        script.crossOrigin = "anonymous"; 
+        script.crossOrigin = "anonymous";
         script.id = "google-client-script";
         script.async = true;
         script.defer = true;
@@ -126,7 +118,6 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
         client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID as string,
         callback: handleCredentialResponse,
         ux_mode: "popup",
-
       });
 
       window.google.accounts.id.renderButton(googleButtonRef.current, {
@@ -149,7 +140,7 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
       (document.activeElement as HTMLElement)?.blur();
     }, 0);
   };
-
+  
   return (
     <Dialog
       open={open}
