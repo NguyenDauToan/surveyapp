@@ -25,7 +25,7 @@
   }
 
   export default function ArchivedRoomsDialog({ onRestore }: ArchivedRoomsDialogProps) {
-    const API_BASE = "https://survey-server-m884.onrender.com/api";
+    const API_BASE = "http://localhost:8080/api";
     const userToken = localStorage.getItem("token") || "";
     const [open, setOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");

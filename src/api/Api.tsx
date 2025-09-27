@@ -53,7 +53,44 @@ axiosClient.interceptors.response.use(
     type: string;
     answers: string[];
   }
-
+  interface Survey {
+    id: number;
+    tieu_de: string;
+    mo_ta?: string;
+    public_link?: string | null;
+  }
+  interface EnterRoomResponse {
+    status: string;
+    room: {
+      id: number;
+      ten_room: string;
+      mo_ta: string;
+      share_url: string;
+      is_public: boolean;
+      ngay_tao: string;
+      member_count: number;
+      members: {
+        id: number;
+        user_id: number;
+        ten_nguoi_dung: string;
+        status: string;
+      }[];
+    };
+  }
+  export const enterRoomByShareURL = async (shareURL: string, password?: string): Promise<EnterRoomResponse> => {
+    const body = password ? { password } : {};
+    const res = await axios.post<EnterRoomResponse>(
+      `${API_BASE}/api/rooms/share/${shareURL}/enter`,
+      body,
+      {
+        withCredentials: true, // nếu dùng cookie/session JWT
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
+    return res.data;
+  };
   // =================== SURVEY & QUESTION ===================
   export const createSurveyAPI = async (token: string, payload: any) => {
     console.log("📌 [API] createSurvey payload:", payload);
@@ -271,11 +308,30 @@ axiosClient.interceptors.response.use(
   };
   // =================== SURVEY ===================
   export const getMySurveys = async (token: string) => {
-    const res = await axiosClient.get("/forms/my", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    return res.data; // backend trả về mảng survey của user
+    try {
+      const res = await axiosClient.get("/forms/my", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+  
+      const surveysFromDB: Survey[] = res.data || [];
+  
+      // Nếu localStorage có URL, thêm vào mảng, nếu không thì bỏ qua
+      const localUrl = localStorage.getItem("latest_survey_url");
+      if (localUrl) {
+        surveysFromDB.push({
+          id: -1, // id giả để không trùng với DB
+          tieu_de: "Khảo sát local",
+          public_link: localUrl,
+        });
+      }
+  
+      return surveysFromDB;
+    } catch (err) {
+      console.error("Lỗi lấy khảo sát:", err);
+      return [];
+    }
   };
+  
 
   export const deleteForm = async (id: number, token: string) => {
     const res = await axiosClient.delete(`/forms/${id}`, {
@@ -285,18 +341,32 @@ axiosClient.interceptors.response.use(
   };
   // =================== ROOM DETAIL ===================
   export const getRoomDetailAPI = async (roomId: number, token: string) => {
+    console.log("Fetching room detail for roomId:", roomId);
+
     const res = await fetch(`${API_BASE}/rooms/${roomId}`, {
-      headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}` },
     });
 
-    const data = await res.json().catch(() => null);
+    console.log("Response status:", res.status, "ok:", res.ok);
 
-    if (!res.ok) {
-      throw new Error(data?.message || res.statusText || "Không thể lấy chi tiết phòng");
+    let data: any = null;
+    try {
+        data = await res.json();
+        console.log("Response data:", data);
+    } catch (err) {
+        console.error("Failed to parse JSON:", err);
     }
 
-    return data; // { id, ten_room, mo_ta, khao_sat, share_url, locked, members, ... }
-  };
+    if (!res.ok) {
+        throw new Error(data?.message || res.statusText || "Không thể lấy chi tiết phòng");
+    }
+
+    // Log khao_sat riêng
+    console.log("KhaoSat in data:", data?.data?.khao_sat);
+
+    return data; // { data: { id, ten_room, mo_ta, khao_sat, share_url, members, ... } }
+};
+
 
   // =================== ROOM UPDATE ===================
   export const updateRoomAPI = async (
@@ -366,11 +436,30 @@ axiosClient.interceptors.response.use(
     );
     return res.data;
   };
-  export const getMyFormsAPI = async (token: string) => {
-    const res = await axios.get(`${API_BASE}/forms/my`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    return res.data.forms;
+  export const getMyFormsAPI = async (token: string): Promise<Survey[]> => {
+    try {
+      // Lấy khảo sát từ database
+      const res = await axios.get(`${API_BASE}/forms/my`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+  
+      const surveysFromDB: Survey[] = res.data.forms || [];
+  
+      // Kiểm tra khảo sát local
+      const localUrl = localStorage.getItem("latest_survey_url");
+      if (localUrl) {
+        surveysFromDB.push({
+          id: -1,            // id âm để phân biệt khảo sát local
+          tieu_de: "Khảo sát local",
+          public_link: localUrl,
+        });
+      }
+  
+      return surveysFromDB;
+    } catch (err) {
+      console.error("Lỗi lấy khảo sát:", err);
+      return [];
+    }
   };
   // FE
   export const getUserByEmailOrUsername = async (email: string, token: string) => {
