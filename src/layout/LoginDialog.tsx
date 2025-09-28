@@ -27,13 +27,21 @@ interface BackendResponse {
   token?: string;
 }
 
+//  ======điều hướng user
+interface LoginDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  redirectTo?: string; 
+}
+
+
 declare global {
   interface Window {
     google?: any;
   }
 }
 
-export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
+export default function LoginDialog({ open, onOpenChange,redirectTo  }: LoginDialogProps) {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const googleButtonRef = useRef<HTMLDivElement | null>(null);
@@ -66,7 +74,7 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
           role: data.user.vai_tro ? "admin" : "user",
         };
       
-        dispatch(login({ user, token: data.token }));
+        dispatch(login({ user, token: data.token })); 
       
         // ✅ Lưu token và user
         localStorage.setItem("token", data.token);
@@ -74,15 +82,21 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
       
         // ✅ Lưu user_id riêng dưới dạng string
         localStorage.setItem("user_id", String(data.user.id));
+        
+  onOpenChange(false);
       
-        if (user.role === "admin") {
-          navigate("/admin");
-        } else {
-          navigate("/");
-        }
-      
-        onOpenChange(false);
+  setTimeout(() => {
+   if (redirectTo) {
+  navigate(redirectTo, { replace: true });
+} else if (user.role === "admin") {
+  navigate("/admin", { replace: true });
+} else {
+  navigate("/", { replace: true });
+}
+  }, 0);
+
       }
+
       else {
         alert("Đăng nhập thất bại");
       }

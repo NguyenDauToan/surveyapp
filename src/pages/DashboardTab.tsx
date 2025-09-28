@@ -60,29 +60,35 @@ export default function DashboardTab({ formId, token }: DashboardProps) {
   return (
     <div className="space-y-6 mt-4">
       {data.map((q) => {
-        // Chuyển option nếu là array → string để hiển thị
-       const chartData =
-  ["SINGLE_CHOICE", "MULTIPLE_CHOICE", "TRUE_FALSE"].includes(q.type) && q.stats
-    ? q.stats.map((s: any) => {
-        let option = s.option;
-
-        // Nếu option là array, flatten và join
-        if (Array.isArray(option)) {
-          option = option.flat(Infinity).join(", ");
+        // MULTIPLE_CHOICE / TRUE_FALSE → PieChart
+        let chartData: any[] = [];
+        if (["MULTIPLE_CHOICE", "TRUE_FALSE"].includes(q.type) && q.stats) {
+          const total = q.stats.reduce(
+            (sum: number, s: any) => sum + s.count,
+            0
+          );
+          chartData = q.stats.map((s: any) => {
+            let option = s.option;
+            if (Array.isArray(option)) {
+              option = option.flat(Infinity).join(", ");
+            }
+            const percent = total > 0 ? (s.count / total) * 100 : 0;
+            return {
+              ...s,
+              optionText: option,
+              percent,
+            };
+          });
         }
 
-        return {
-          ...s,
-          optionText: option,
-        };
-      })
-    : [];
-
         return (
-          <div key={q.question_id} className="border p-4 rounded-lg bg-muted/10">
+          <div
+            key={q.question_id}
+            className="border p-4 rounded-lg bg-muted/10"
+          >
             <h4 className="font-semibold mb-2">{q.content}</h4>
 
-            {/* SINGLE_CHOICE / MULTIPLE_CHOICE / TRUE_FALSE */}
+            {/* MULTIPLE_CHOICE / TRUE_FALSE */}
             {chartData.length > 0 && (
               <div className="w-full h-64">
                 <ResponsiveContainer width="100%" height="100%">
@@ -94,29 +100,24 @@ export default function DashboardTab({ formId, token }: DashboardProps) {
                       cx="50%"
                       cy="50%"
                       outerRadius={80}
-                      label={({ payload }) =>
-                        payload ? `${payload.optionText}: ${payload.percent?.toFixed(0) ?? 0}%` : ""
+                      label={({ optionText, percent }) =>
+                        `${optionText}: ${percent.toFixed(0)}%`
                       }
                     >
                       {chartData.map((_, idx) => (
                         <Cell key={idx} fill={COLORS[idx % COLORS.length]} />
                       ))}
                     </Pie>
-                      <Tooltip
-                        formatter={(value: any, name: string, props: any) => {
-                          const payload = props?.payload;
-                          if (!payload) return ["-", "-"];
-
-                          let optionText = payload.optionText;
-
-                          if (Array.isArray(optionText)) {
-                            optionText = optionText.join(", ");
-                          }
-
-                          return [`${payload.count}`, optionText];
-                        }}
-                      />
-
+                    <Tooltip
+                      formatter={(value: any, name: string, props: any) => {
+                        const payload = props?.payload;
+                        if (!payload) return ["-", "-"];
+                        return [
+                          `${payload.count} (${payload.percent.toFixed(1)}%)`,
+                          payload.optionText,
+                        ];
+                      }}
+                    />
                     <Legend />
                   </PieChart>
                 </ResponsiveContainer>
@@ -151,8 +152,8 @@ export default function DashboardTab({ formId, token }: DashboardProps) {
               </ul>
             )}
 
-            {/* UPLOAD_FILE */}
-            {q.type === "UPLOAD_FILE" && q.stats?.length > 0 && (
+            {/* FILE_UPLOAD */}
+            {q.type === "FILE_UPLOAD" && q.stats?.length > 0 && (
               <ul className="list-disc list-inside text-sm">
                 {q.stats.map((s: any, idx: number) => (
                   <li key={idx}>

@@ -193,24 +193,27 @@ const shareRes = await axios.post(
   { headers: { Authorization: `Bearer ${token}` } }
 );
 
-// 1️⃣ Lấy shareToken từ share_url
 const shareToken = shareRes.data.share_url.split("/").pop();
 if (!shareToken) throw new Error("Không lấy được share token từ backend");
 
-// 2️⃣ Tạo link FE đầy đủ
 const FE_BASE = `${window.location.origin}/surveyapp`; // FE base path
 const surveyFEUrl = `${FE_BASE}/survey/${shareToken}`;
 setSurveyLink(surveyFEUrl);
 
 console.log(" Link FE đầy đủ:", surveyFEUrl);
 
-// 3️⃣ Lấy embed code, đổi localhost sang backend nếu cần
 const baseUrl = "https://survey-server-m884.onrender.com";
 const embedCode = shareRes.data.embed_code.replace("http://localhost:8080", baseUrl);
 
-console.log("📌 Embed code:", embedCode);
+console.log(" Embed code:", embedCode);
 
+await axios.put(
+    `https://survey-server-m884.onrender.com/api/forms/${formId}/update-publiclink`,
+    { public_link: surveyFEUrl },
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
 
+  toast.success("Đã cập nhật public link thành công!");
 
     } catch (err: any) {
       console.error(" [saveSurvey] Save survey error:", {
@@ -370,6 +373,7 @@ console.log("📌 Embed code:", embedCode);
                   </SelectContent>
                 </Select>
               </div>
+              
               {newQuestion.type === "file-upload" && (
                 <div>
                   <Label>Người trả lời sẽ tải ảnh lên</Label>
@@ -560,6 +564,7 @@ console.log("📌 Embed code:", embedCode);
           </a>
         </div>
       )}
+
             <Button onClick={saveSurvey}>
               <Save className="h-4 w-4 mr-2" />
               Lưu khảo sát

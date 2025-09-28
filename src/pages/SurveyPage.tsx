@@ -1,12 +1,13 @@
 import { useEffect, useState, ChangeEvent, FormEvent } from "react";
 import axios from "axios";
 import { useParams } from "react-router-dom";
+import LoginDialog from "@/layout/LoginDialog";
 
 interface PublicQuestion {
   id: number;
   type: string;
   content: string;
-  props: string; // JSON string chứa options, required,...
+  props: string;
 }
 
 interface PublicSurvey {
@@ -34,119 +35,273 @@ export default function SurveyPage() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
-  const [fieldErrors, setFieldErrors] = useState<Record<number, string>>({}); // 🔹 lỗi theo câu hỏi
+  const [fieldErrors, setFieldErrors] = useState<Record<number, string>>({});
+  const [loginOpen, setLoginOpen] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [authRequired, setAuthRequired] = useState(false); // 🔹 nếu cần login
 
-  // Fetch survey public
-  useEffect(() => {
-    async function fetchSurvey() {
-      try {
-        const res = await axios.get(
-          `https://survey-server-m884.onrender.com/api/forms/public/${shareToken}`
-        );
-        const data: PublicSurvey = res.data;
-        setSurvey(data);
 
-        // Khởi tạo answers
-        const initAnswers = data.questions.map((q) => ({
-          cau_hoi_id: q.id,
-          loai_cau_hoi: q.type.toLowerCase(),
-          noi_dung: "",
-          lua_chon: "",
-        }));
-        setAnswers(initAnswers);
-      } catch (err) {
-        console.error(err);
-        setErrorMsg("Không thể tải khảo sát.");
+  // fetch survey
+  const fetchSurvey = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const headers: any = {};
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const res = await axios.get(
+        `https://survey-server-m884.onrender.com/api/forms/public/${shareToken}`,
+        { headers }
+      );
+      const data: PublicSurvey = res.data;
+      setSurvey(data);
+
+      const initAnswers = data.questions.map((q) => ({
+        cau_hoi_id: q.id,
+        loai_cau_hoi: q.type,
+        noi_dung: "",
+        lua_chon: "",
+      }));
+      setAnswers(initAnswers);
+      setAuthRequired(false); // đã fetch thành công
+    } catch (err: any) {
+      console.error(err);
+      if (err.response?.status === 401) {
+        setAuthRequired(true);
+        setLoginOpen(true);
+        return;
       }
+      setErrorMsg("Không thể tải khảo sát.");
     }
+  };
+
+  useEffect(() => {
     fetchSurvey();
   }, [shareToken]);
 
-  const handleChange = (cauHoiId: number, value: string | string[] | File | null) => {
-    setAnswers((prev) =>
-      prev.map((a) =>
-        a.cau_hoi_id === cauHoiId
-          ? {
-              ...a,
-              noi_dung: typeof value === "string" ? value : a.noi_dung,
-              lua_chon: Array.isArray(value) ? JSON.stringify(value) : "",
-              file: value instanceof File ? value : undefined,
-            }
-          : a
-      )
-    );
-
-    // 🔹 reset lỗi khi người dùng nhập lại
-    setFieldErrors((prev) => {
-      const newErrors = { ...prev };
-      delete newErrors[cauHoiId];
-      return newErrors;
-    });
-  };
-
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!survey) return;
-    setLoading(true);
-    setErrorMsg("");
-    setFieldErrors({}); // reset lỗi cũ
-
+  const fetchSurveyAfterLogin = async () => {
     try {
-      const hasFile = answers.some((a) => a.loai_cau_hoi === "file_upload");
+      const token = localStorage.getItem("token");
+      if (!token) return;
+      const res = await axios.get(
+        `https://survey-server-m884.onrender.com/api/forms/public/${shareToken}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const data: PublicSurvey = res.data;
+      setSurvey(data);
 
-      if (hasFile) {
-        const formData = new FormData();
-        const data = { email: email || null, answers: answers.map(({ file, ...rest }) => rest) };
-        formData.append("data", JSON.stringify(data));
-        answers.forEach((a) => {
-          if (a.file) formData.append(`file${a.cau_hoi_id}`, a.file);
-        });
-
-        await axios.post(
-          `https://survey-server-m884.onrender.com/api/forms/${survey.id}/submissions`,
-          formData,
-          { headers: { "Content-Type": "multipart/form-data" } }
-        );
-      } else {
-        await axios.post(
-          `https://survey-server-m884.onrender.com/api/forms/${survey.id}/submissions`,
-          { khao_sat_id: survey.id, email: email || null, answers },
-          { headers: { "Content-Type": "application/json" } }
-        );
-      }
-
-      alert("Gửi khảo sát thành công!");
-    } catch (err: any) {
+      const initAnswers = data.questions.map((q) => ({
+        cau_hoi_id: q.id,
+        loai_cau_hoi: q.type,
+        noi_dung: "",
+        lua_chon: "",
+      }));
+      setAnswers(initAnswers);
+      setAuthRequired(false);
+    } catch (err) {
       console.error(err);
-
-      const status = err.response?.status;
-      const msg = err.response?.data?.error || err.response?.data?.message || err.message;
-
-      // 🔹 xử lý lỗi câu hỏi bắt buộc
-      if (status === 400 && typeof msg === "string" && msg.startsWith("Câu hỏi")) {
-        const match = msg.match(/Câu hỏi (\d+)/);
-        if (match) {
-          const qId = parseInt(match[1], 10);
-          setFieldErrors((prev) => ({
-            ...prev,
-            [qId]: "Đây là câu hỏi bắt buộc",
-          }));
-          setLoading(false);
-          return;
-        }
-      }
-
-      const friendlyMsg = mapErrorMessage(status, msg);
-      setErrorMsg(friendlyMsg);
-    } finally {
-      setLoading(false);
+      setErrorMsg("Không thể tải khảo sát ngay cả sau khi login.");
     }
   };
 
-  if (!survey) return <div className="text-center py-10">Đang tải khảo sát...</div>;
+// const handleChange = (cauHoiId: number, value: string | string[] | File | null) => {
+//   setAnswers((prev) =>
+//     prev.map((a) =>
+//       a.cau_hoi_id === cauHoiId
+//         ? {
+//             ...a,
+//             noi_dung: typeof value === "string" ? value : a.noi_dung,
+//             lua_chon: Array.isArray(value) ? JSON.stringify(value) : "",
+//             file: value instanceof File ? value : undefined,
+//           }
+//         : a
+//     )
+//   );
+//     setFieldErrors((prev) => {
+//       const newErrors = { ...prev };
+//       delete newErrors[cauHoiId];
+//       return newErrors;
+//     });
+//   };
 
-  // hiển thị lỗi chung
-  function mapErrorMessage(status?: number, msg?: any): string {
+// const handleChange = (
+//   cauHoiId: number,
+//   value: string | File | null, // string cho radio/text, File cho file_upload
+//   type?: "multiple_choice" | "file_upload" | "text"
+// ) => {
+//   setAnswers((prev) =>
+//     prev.map((a) => {
+//       if (a.cau_hoi_id !== cauHoiId) return a;
+
+//       if (type === "multiple_choice") {
+//         return {
+//           ...a,
+//           noi_dung: "", // không dùng noi_dung
+//           lua_chon: JSON.stringify([value]), // lưu lựa chọn người dùng
+//         };
+//       }
+
+//       if (type === "file_upload") {
+//         return { ...a, file: value instanceof File ? value : undefined };
+//       }
+
+//       // text / textarea
+//       return { ...a, noi_dung: typeof value === "string" ? value : a.noi_dung };
+//     })
+//   );
+
+//   setFieldErrors((prev) => {
+//     const newErrors = { ...prev };
+//     delete newErrors[cauHoiId];
+//     return newErrors;
+//   });
+// };
+
+  // const handleSubmit = async (e: FormEvent) => {
+  //   e.preventDefault();
+  //   if (!survey) return;
+  //   setLoading(true);
+  //   setErrorMsg("");
+  //   setFieldErrors({});
+
+  //   try {
+  //     const hasFile = answers.some((a) => a.loai_cau_hoi === "FILE_UPLOAD");
+  //     const token = localStorage.getItem("token");
+
+  //     const headers: any = {};
+  //     if (hasFile) {
+  //       if (token) headers["Authorization"] = `Bearer ${token}`;
+  //     } else {
+  //       headers["Content-Type"] = "application/json";
+  //       if (token) headers["Authorization"] = `Bearer ${token}`;
+  //     }
+
+  //     const payload = hasFile
+  //       ? (() => {
+  //           const formData = new FormData();
+  //           const data = { email: email || null, answers: answers.map(({ file, ...rest }) => rest) };
+  //           formData.append("data", JSON.stringify(data));
+  //           answers.forEach((a) => {
+  //             if (a.file) formData.append(`file_${a.cau_hoi_id}`, a.file);
+  //           });
+  //           return formData;
+  //         })()
+  //       : { khao_sat_id: survey.id, email: email || null, answers };
+
+  //     await axios.post(
+  //       `https://survey-server-m884.onrender.com/api/forms/${survey.id}/submissions`,
+  //       payload,
+  //       { headers }
+  //     );
+
+  //     setSubmitted(true);
+  //   } catch (err: any) {
+  //     console.error(err);
+
+  //     const status = err.response?.status;
+  //     const msg = err.response?.data?.error || err.response?.data?.message || err.message;
+
+  //     if (status === 400 && typeof msg === "string" && msg.startsWith("Câu hỏi")) {
+  //       const match = msg.match(/Câu hỏi (\d+)/);
+  //       if (match) {
+  //         const qId = parseInt(match[1], 10);
+  //         setFieldErrors((prev) => ({ ...prev, [qId]: "Đây là câu hỏi bắt buộc" }));
+  //         setLoading(false);
+  //         return;
+  //       }
+  //     }
+
+  //     const friendlyMsg = mapErrorMessage(status, msg);
+  //     if (friendlyMsg) setErrorMsg(friendlyMsg);
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
+// =================bản 2
+
+// handleChange
+const handleChange = (
+  cauHoiId: number,
+  value: string | File | null,
+  type?: "multiple_choice" | "file_upload" | "text"
+) => {
+  setAnswers((prev) =>
+    prev.map((a) => {
+      if (a.cau_hoi_id !== cauHoiId) return a;
+
+      if (type === "multiple_choice") {
+        return { ...a, noi_dung: "", lua_chon: JSON.stringify([value]) };
+      }
+      if (type === "file_upload") {
+        return { ...a, file: value instanceof File ? value : undefined };
+      }
+      return { ...a, noi_dung: typeof value === "string" ? value : a.noi_dung };
+    })
+  );
+
+  setFieldErrors((prev) => {
+    const newErrors = { ...prev };
+    delete newErrors[cauHoiId];
+    return newErrors;
+  });
+};
+
+// handleSubmit
+const handleSubmit = async (e: FormEvent) => {
+  e.preventDefault();
+  if (!survey) return;
+  setLoading(true);
+  setErrorMsg("");
+  setFieldErrors({});
+
+  try {
+    const hasFile = answers.some((a) => a.loai_cau_hoi === "upload_file");
+    const token = localStorage.getItem("token");
+
+    const headers: any = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+
+    let payload: FormData | object;
+
+    if (hasFile) {
+      const formData = new FormData();
+
+      // Chuẩn BE-23: key "data" chứa JSON string
+      const data = {
+        email: email || null,
+        answers: answers.map(({ file, ...rest }) => rest),
+        khao_sat_id: survey.id,
+      };
+      formData.append("data", JSON.stringify(data));
+
+      // file riêng
+      answers.forEach((a) => {
+        if (a.file) formData.append(`file_${a.cau_hoi_id}`, a.file);
+      });
+
+      payload = formData;
+      // Không set Content-Type, axios tự handle
+    } else {
+      headers["Content-Type"] = "application/json";
+      payload = { khao_sat_id: survey.id, email: email || null, answers };
+    }
+
+    await axios.post(
+      `https://survey-server-m884.onrender.com/api/forms/${survey.id}/submissions`,
+      payload,
+      { headers }
+    );
+
+    setSubmitted(true);
+  } catch (err: any) {
+    console.error(err);
+    setErrorMsg("Gửi khảo sát thất bại, vui lòng thử lại.");
+  } finally {
+    setLoading(false);
+  }
+};
+
+
+  function mapErrorMessage(status?: number, msg?: any): string | undefined {
     const message = typeof msg === "string" ? msg : JSON.stringify(msg);
 
     if (status === 400) {
@@ -157,36 +312,59 @@ export default function SurveyPage() {
       return message;
     }
 
-    if (status === 401) {
-      if (message === "Khảo sát này yêu cầu đăng nhập") {
-        return "Khảo sát này yêu cầu đăng nhập.";
-      }
-      return "Bạn chưa được phép thực hiện hành động này.";
-    }
-
-    if (status === 403) {
-      if (message === "Khảo sát đã đạt giới hạn số phản hồi")
-        return "Khảo sát đã đạt giới hạn số phản hồi.";
-      return "Bạn không có quyền tham gia khảo sát này.";
-    }
-
-    if (status === 404) {
-      if (message === "Khảo sát không tồn tại") return "Khảo sát không tồn tại.";
-      return "Không tìm thấy khảo sát.";
-    }
-
-    if (status === 500) {
-      if (message === "Cấu hình khảo sát không hợp lệ")
-        return "Cấu hình khảo sát không hợp lệ, vui lòng liên hệ quản trị.";
-      if (message === "Không thể kiểm tra số phản hồi")
-        return "Lỗi khi kiểm tra số phản hồi, vui lòng thử lại.";
-      if (message === "Không thể lưu phản hồi")
-        return "Không thể lưu phản hồi, vui lòng thử lại.";
-      return "Lỗi hệ thống, vui lòng thử lại.";
-    }
-
+    if (status === 401) return "Bạn cần đăng nhập để xem khảo sát.";
+    if (status === 403) return "Bạn không có quyền tham gia khảo sát này.";
+    if (status === 404) return "Khảo sát không tồn tại.";
+    if (status === 500) return "Lỗi hệ thống, vui lòng thử lại.";
     return "Lỗi không xác định.";
   }
+
+  // ==== RENDER ====
+  if (!survey && !authRequired)
+    return <div className="text-center py-10">Đang tải khảo sát...</div>;
+
+  if (authRequired && !survey)
+    return (
+      <div className="text-center py-10">
+        <p>Bạn cần đăng nhập để xem khảo sát.</p>
+        <LoginDialog
+          open={loginOpen}
+          onOpenChange={(open) => {
+            setLoginOpen(open);
+            if (!open) fetchSurveyAfterLogin();
+          }}
+        />
+      </div>
+    );
+
+  if (submitted)
+    return (
+      <div className="max-w-2xl mx-auto p-8 text-center bg-white rounded-xl shadow">
+        <h2 className="text-2xl font-bold text-green-600 mb-4">
+          Khảo sát của bạn đã được ghi lại!
+        </h2>
+        <p className="text-gray-700 mb-6">
+          Cảm ơn bạn đã tham gia khảo sát. Chúng tôi đã lưu phản hồi của bạn thành công.
+        </p>
+        <button
+          onClick={() => {
+            setSubmitted(false);
+            setAnswers(
+              survey!.questions.map((q) => ({
+                cau_hoi_id: q.id,
+                loai_cau_hoi: q.type.toLowerCase(),
+                noi_dung: "",
+                lua_chon: "",
+              }))
+            );
+            setEmail("");
+          }}
+          className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition"
+        >
+          Gửi ý kiến phản hồi khác
+        </button>
+      </div>
+    );
 
   return (
     <div className="max-w-3xl mx-auto p-6 bg-white shadow-lg rounded-xl my-6">
@@ -194,7 +372,6 @@ export default function SurveyPage() {
       <p className="text-gray-600 mb-6">{survey.mo_ta}</p>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Email */}
         {survey.settings.collect_email && (
           <div>
             <label className="block font-medium mb-1">Email (tùy chọn)</label>
@@ -208,7 +385,6 @@ export default function SurveyPage() {
           </div>
         )}
 
-        {/* Câu hỏi */}
         {survey.questions.map((q) => {
           const props = JSON.parse(q.props || "{}");
           const ans = answers.find((a) => a.cau_hoi_id === q.id);
@@ -218,9 +394,7 @@ export default function SurveyPage() {
               <label className="block font-medium text-gray-700">
                 {q.content} {props.required && <span className="text-red-500">*</span>}
               </label>
-              <p className="text-sm text-gray-500">Loại: {q.type}</p>
 
-              {/* Fill blank */}
               {q.type.toLowerCase() === "fill_blank" && (
                 <input
                   type="text"
@@ -231,47 +405,44 @@ export default function SurveyPage() {
                 />
               )}
 
-              {/* Multiple choice */}
-              {q.type.toLowerCase() === "multiple_choice" && (
-                <div className="space-y-1">
-                  {props.options?.map((opt: string) => (
-                    <label key={opt} className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        className="w-4 h-4"
-                        checked={JSON.parse(ans?.lua_chon || "[]").includes(opt)}
-                        onChange={(e) => {
-                          const prev = JSON.parse(ans?.lua_chon || "[]");
-                          if (e.target.checked) prev.push(opt);
-                          else prev.splice(prev.indexOf(opt), 1);
-                          handleChange(q.id, prev);
-                        }}
-                      />
-                      <span className="text-gray-700">{opt}</span>
-                    </label>
-                  ))}
-                </div>
-              )}
-
-              {/* Single choice */}
-              {q.type.toLowerCase() === "single_choice" && (
-                <div className="space-y-1">
-                  {props.options?.map((opt: string) => (
-                    <label key={opt} className="flex items-center gap-2">
-                      <input
-                        type="radio"
-                        name={`single_choice_${q.id}`}
-                        value={opt}
-                        checked={ans?.noi_dung === opt}
-                        onChange={() => handleChange(q.id, opt)}
-                      />
-                      <span className="text-gray-700">{opt}</span>
-                    </label>
-                  ))}
-                </div>
-              )}
-
-              {/* True/False */}
+{/* {q.type.toLowerCase() === "multiple_choice" && (
+  <div className="space-y-1">
+    {props.options?.map(opt => {
+      const ans = answers.find(a => a.cau_hoi_id === q.id);
+      return (
+        <label key={opt} className="flex items-center gap-2">
+          <input
+            type="radio"
+            name={`multiple_choice_${q.id}`}
+            value={opt}
+            checked={ans?.noi_dung === opt} // chỉ so sánh với noi_dung
+            onChange={() => handleChange(q.id, opt, "multiple_choice", props.options)}
+          />
+          <span className="text-gray-700">{opt}</span>
+        </label>
+      );
+    })}
+  </div>
+)} */}
+{q.type.toLowerCase() === "multiple_choice" && (
+  <div className="space-y-1">
+    {props.options?.map((opt: string) => {
+      const ans = answers.find((a) => a.cau_hoi_id === q.id);
+      return (
+        <label key={opt} className="flex items-center gap-2">
+          <input
+            type="radio"
+            name={`multiple_choice_${q.id}`}
+            value={opt}
+            checked={ans?.lua_chon === JSON.stringify([opt])}
+            onChange={() => handleChange(q.id, opt, "multiple_choice")}
+          />
+          <span className="text-gray-700">{opt}</span>
+        </label>
+      );
+    })}
+  </div>
+)}
               {q.type.toLowerCase() === "true_false" && (
                 <div className="flex gap-4">
                   {["Có", "Không"].map((val) => (
@@ -289,7 +460,6 @@ export default function SurveyPage() {
                 </div>
               )}
 
-              {/* Rating */}
               {q.type.toLowerCase() === "rating" && (
                 <div className="flex gap-1">
                   {[1, 2, 3, 4, 5].map((star) => (
@@ -307,8 +477,7 @@ export default function SurveyPage() {
                 </div>
               )}
 
-              {/* Upload file */}
-              {q.type.toLowerCase() === "file_upload" && (
+              {/* {q.type.toLowerCase() === "file_upload" && (
                 <div className="space-y-2">
                   {ans?.file ? (
                     <div className="flex items-center justify-between bg-gray-100 p-2 rounded">
@@ -328,23 +497,54 @@ export default function SurveyPage() {
                         <input
                           type="file"
                           className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer"
+                          // onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                          //   handleChange(q.id, e.target.files?.[0] || null)
+                          // }
                           onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                            handleChange(q.id, e.target.files?.[0] || null)
-                          }
+  handleChange(q.id, e.target.files?.[0] || null, "file_upload")
+}
                         />
                       </label>
                     </div>
                   )}
                 </div>
-              )}
+              )} */}
+{q.type.toLowerCase() === "file_upload" && (
+  <div className="space-y-2">
+    {ans?.file ? (
+      <div className="flex items-center justify-between bg-gray-100 p-2 rounded">
+        <span className="text-sm text-gray-700">{ans.file.name}</span>
+        <button
+          type="button"
+          className="text-red-500 text-sm"
+          onClick={() => handleChange(q.id, null, "file_upload")}
+        >
+          Xóa
+        </button>
+      </div>
+    ) : (
+      <label className="block w-full border border-gray-300 rounded p-2 text-center cursor-pointer bg-white hover:bg-gray-50 relative overflow-hidden">
+        Chọn file
+        <input
+          type="file"
+          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+          onChange={(e: ChangeEvent<HTMLInputElement>) =>
+            handleChange(q.id, e.target.files?.[0] || null, "file_upload")
+          }
+        />
+      </label>
+    )}
+  </div>
+)}
 
-              {/* 🔹 lỗi riêng cho câu hỏi */}
+
               {fieldErrors[q.id] && (
                 <p className="text-red-500 text-sm">{fieldErrors[q.id]}</p>
               )}
             </div>
           );
         })}
+
         <button
           type="submit"
           disabled={loading}
@@ -354,10 +554,17 @@ export default function SurveyPage() {
         </button>
       </form>
 
-      {/* 🔹 lỗi chung */}
-      {errorMsg && (
-        <div className="text-red-600 mt-4 text-center text-sm">{errorMsg}</div>
-      )}
+      {errorMsg && <div className="text-red-600 mt-4 text-center text-sm">{errorMsg}</div>}
+
+<LoginDialog
+  open={loginOpen}
+  onOpenChange={(open) => {
+    setLoginOpen(open);
+    if (!open) fetchSurveyAfterLogin();
+  }}
+  redirectTo={window.location.pathname + window.location.search} // quay về trang hiện tại
+/>
+
     </div>
   );
 }
