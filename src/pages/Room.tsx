@@ -25,11 +25,13 @@ import {
 } from "@/components/ui/tabs";
 import { enterRoomAPI } from "@/api/Api";
 import { getRoomParticipantsAPI } from "@/api/Api";
+import { enterRoomByShareURL } from "@/api/Api";
 
 interface Member {
-    id: string;      // user_id
-    name: string;    // tên người dùng (Google name)
-    email: string;   // email
+    id: string;        // user_id (string hóa để đồng nhất key React)
+    name: string;      // tên người dùng
+    email?: string;    // optional vì API có thể không trả
+    status?: string;   // trạng thái tham gia (pending, accepted, ...)
 }
 interface KhaoSatSummary {
     id: number;
@@ -42,7 +44,7 @@ interface KhaoSatSummary {
 
 interface Room {
     id: number;
-    nguoi_tao_id?: string;
+    nguoi_tao_id?: number | string; // 👈 nên cho phép cả string (API đôi khi trả string)
     ten_room: string;
     mo_ta?: string | null;
     ngay_tao?: string;
@@ -59,9 +61,10 @@ interface Room {
     khao_sat_link?: string | null;
 }
 
+
 interface RoomWithIsMine extends Room {
     isMine?: boolean;
-    owner_id?: string;
+    owner_id?: number | string;
 }
 interface Survey {
     id: number;
@@ -89,7 +92,7 @@ const RoomPage = () => {
     const [showEditForm, setShowEditForm] = useState(false);
     const [archiveDialogRoom, setArchiveDialogRoom] = useState<Room | null>(null);
     const token = localStorage.getItem("token");
-    const userId = localStorage.getItem("user_id") || "";
+    const userId = Number(localStorage.getItem("user_id") || 0); // ép về number
     const API_BASE = "http://localhost:8080/api";
     const [selectedRoom, setSelectedRoom] = useState<RoomWithIsMine | null>(null);
     const [members, setMembers] = useState<Member[]>([]);
@@ -117,16 +120,21 @@ const RoomPage = () => {
             .catch(err => toast.error("Không tải được khảo sát của bạn"));
     }, []);
 
-
     const fetchMembers = async (roomId: number) => {
         if (!token) return;
         try {
             const res = await getRoomParticipantsAPI(roomId, token);
-            setMembers(res.data.participants);
+            const mappedMembers: Member[] = (res.data.participants || []).map((p: any) => ({
+                id: String(p.user_id),          // dùng user_id làm id
+                name: p.ten_nguoi_dung || "",   // map tên
+                email: p.email || ""            // nếu API không có email thì để rỗng
+            }));
+            setMembers(mappedMembers);
         } catch (err: any) {
             toast.error("Không lấy được danh sách thành viên");
         }
     };
+
     const checkRoomExists = async (roomId) => {
         try {
             const response = await axios.get(`${API_BASE}/rooms/${roomId}`, {
@@ -139,76 +147,82 @@ const RoomPage = () => {
         }
     };
     const handleJoinRoomByURL = async () => {
-        if (!joinRoomURL) {
-            return toast.error("Vui lòng nhập URL phòng");
-        }
-    
+        if (!joinRoomURL) return toast.error("Vui lòng nhập URL phòng");
+
+        console.log("👉 joinRoomURL nhập vào:", joinRoomURL);
+
         const roomIdMatch = joinRoomURL.match(
             /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i
         );
-        if (!roomIdMatch) return toast.error("URL không hợp lệ");
-    
+        console.log("👉 roomIdMatch:", roomIdMatch);
+
+        if (!roomIdMatch) {
+            toast.error("URL không hợp lệ");
+            return;
+        }
+
         const shareURL = roomIdMatch[0];
-    
-        // Check if already a member
+        console.log("👉 shareURL lấy được từ URL:", shareURL);
+
         const alreadyJoined = myRooms.some(r => r.share_url === shareURL);
+        console.log("👉 alreadyJoined:", alreadyJoined);
+
         if (alreadyJoined) return toast.error("Bạn đã là thành viên của phòng này");
-    
+
+        const mapToMember = (p: any): Member => ({
+            id: String(p.user_id ?? p.id),
+            name: p.ten_nguoi_dung || "",
+            email: p.email || "",
+            status: p.status,
+        });
+
         try {
-            const response = await axios.post(
-                `${API_BASE}/rooms/share/${shareURL}/enter`,
-                {},
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
-    
-            const roomData = response.data.room;
-            // Construct the room object to fit the structure used in myRooms
-            const newRoom = {
+            console.log("👉 Gọi API enterRoomByShareURL với:", shareURL);
+            const response = await enterRoomByShareURL(shareURL);
+            console.log("👉 Response từ API:", response);
+
+            const roomData = response.room as any;
+
+            const newRoom: RoomWithIsMine = {
                 ...roomData,
-                members: roomData.members || [], // Ensure members are included
-                isMine: true, // Since the user has joined, they are the owner
+                nguoi_tao_id: Number(roomData.nguoi_tao_id ?? userId),
+                members: (roomData.members || []).map(mapToMember),
+                share_url: roomData.share_url || shareURL,
+                isMine: String(roomData.nguoi_tao_id) === String(userId),
             };
-    
-            // Update myRooms state
-            setMyRooms(prev => {
-                const exists = prev.find(r => r.id === newRoom.id);
-                if (exists) return prev; // Don't add if already exists
-                return [...prev, newRoom]; // Add new room
-            });
-    
+
+            console.log("👉 newRoom object:", newRoom);
+
+            setMyRooms(prev => [...prev, newRoom]);
             toast.success("Bạn đã tham gia phòng thành công");
             setJoinRoomURL("");
         } catch (error: any) {
-            console.error("Lỗi khi tham gia phòng:", error);
-            // Handle password case
+            console.error("❌ Lỗi khi join room:", error);
+
             if (error.response?.data?.error === "Vui lòng nhập mật khẩu") {
                 const password = prompt("Nhập mật khẩu phòng:");
                 if (!password) return toast.error("Bạn chưa nhập mật khẩu");
-    
+
                 try {
-                    const responseWithPass = await axios.post(
-                        `${API_BASE}/rooms/share/${shareURL}/enter`,
-                        { password },
-                        { headers: { Authorization: `Bearer ${token}` } }
-                    );
-    
-                    const roomData = responseWithPass.data.room;
-                    const newRoom = {
+                    console.log("👉 Gọi API enterRoomByShareURL với password");
+                    const responseWithPass = await enterRoomByShareURL(shareURL, password);
+                    console.log("👉 ResponseWithPass:", responseWithPass);
+
+                    const roomData = responseWithPass.room as any;
+
+                    const newRoom: RoomWithIsMine = {
                         ...roomData,
-                        members: roomData.members || [],
-                        isMine: true,
+                        nguoi_tao_id: Number(roomData.nguoi_tao_id ?? userId),
+                        members: (roomData.members || []).map(mapToMember),
+                        share_url: roomData.share_url || shareURL,
+                        isMine: String(roomData.nguoi_tao_id) === String(userId),
                     };
-    
-                    setMyRooms(prev => {
-                        const exists = prev.find(r => r.id === newRoom.id);
-                        if (exists) return prev;
-                        return [...prev, newRoom];
-                    });
-    
+
+                    setMyRooms(prev => [...prev, newRoom]);
                     toast.success("Bạn đã tham gia phòng thành công");
                     setJoinRoomURL("");
                 } catch (err) {
-                    console.error(err);
+                    console.error("❌ Lỗi khi join với password:", err);
                     toast.error("Sai mật khẩu hoặc không thể tham gia phòng");
                 }
             } else {
@@ -221,25 +235,22 @@ const RoomPage = () => {
     const fetchPublicRooms = async () => {
         try {
             const res = await axios.get(`${API_BASE}/lobby`);
-            const rooms: Room[] = res.data.data || res.data.rooms || []; // 👈 lấy đồng thời cả 2 khả năng
+            const rooms: Room[] = res.data.data || res.data.rooms || [];
+
             const roomsWithMembers = await Promise.all(
                 rooms
                     .filter(r => r.trang_thai !== "archived" && r.is_public)
                     .map(async r => {
                         try {
                             const resMembers = await axios.get(`${API_BASE}/rooms/${r.id}/participants`);
-                            return {
-                                ...r,
-                                members: resMembers.data.participants || [],
-                                share_url: r.share_url || `${window.location.origin}/room/${r.id}`,
-                            };
-                        } catch (err) {
-                            console.error("Không lấy được member cho room", r.id, err);
-                            return {
-                                ...r,
-                                members: [],
-                                share_url: r.share_url || `${window.location.origin}/room/${r.id}`,
-                            };
+                            const mappedMembers: Member[] = (resMembers.data.participants || []).map((p: any) => ({
+                                id: String(p.user_id),
+                                name: p.ten_nguoi_dung || "",
+                                email: p.email || ""
+                            }));
+                            return { ...r, members: mappedMembers, share_url: r.share_url || `${window.location.origin}/room/${r.id}` };
+                        } catch {
+                            return { ...r, members: [], share_url: r.share_url || `${window.location.origin}/room/${r.id}` };
                         }
                     })
             );
@@ -248,6 +259,7 @@ const RoomPage = () => {
             console.error("Lỗi khi fetch public rooms:", err);
         }
     };
+
 
     const fetchRooms = async () => {
         if (!token) return;
@@ -264,31 +276,58 @@ const RoomPage = () => {
                 myData.map(async r => {
                     try {
                         const resMembers = await axios.get(`${API_BASE}/rooms/${r.id}/participants`);
+                        const mappedMembers: Member[] = (resMembers.data.participants || []).map((p: any) => ({
+                            id: String(p.user_id),
+                            name: p.ten_nguoi_dung || "",
+                            email: p.email || "",
+                            status: p.status || undefined,
+                        }));
+
                         return {
                             ...r,
                             nguoi_tao_id: String(r.nguoi_tao_id ?? userId),
-                            members: resMembers.data.participants || [{ id: userId, name: storedUser.Ten || "Bạn", email: storedUser.email || "" }],
+                            members: mappedMembers,
                             share_url: r.share_url || `${window.location.origin}/room/${r.id}`,
-                            isMine: r.nguoi_tao_id === userId,
+                            isMine: r.nguoi_tao_id === userId, // ✅ so sánh trực tiếp
                         };
-                    } catch (err) {
-                        console.error("Không lấy được member cho room", r.id, err);
-                        return { ...r, members: [{ id: userId, name: storedUser.Ten || "Bạn", email: storedUser.email || "" }] };
+                    } catch {
+                        const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+                        return {
+                            ...r,
+                            members: [
+                                {
+                                    id: String(userId), // ✅ ép sang string
+                                    name: storedUser.Ten || "Bạn",
+                                    email: storedUser.email || "",
+                                    status: "owner",
+                                },
+                            ],
+                        };
                     }
                 })
             );
 
+
+
             const publicRoomsWithMembers: Room[] = await Promise.all(
-                publicData.map(async r => {
+                publicData.map(async (r) => {
                     try {
                         const resMembers = await axios.get(`${API_BASE}/rooms/${r.id}/participants`, {
                             headers: { Authorization: `Bearer ${token}` },
                         });
+
+                        const mappedMembers: Member[] = (resMembers.data.participants || []).map((p: any) => ({
+                            id: String(p.user_id),
+                            name: p.ten_nguoi_dung || "",
+                            email: p.email || "",
+                            status: p.status || undefined,
+                        }));
+
                         return {
                             ...r,
-                            members: resMembers.data.participants || [],
+                            members: mappedMembers,
                             share_url: r.share_url || `${window.location.origin}/room/${r.id}`,
-                            isMine: r.nguoi_tao_id === userId,
+                            isMine: String(r.nguoi_tao_id) === String(userId),
                         };
                     } catch (err) {
                         console.error("Không lấy được member cho public room", r.id, err);
@@ -370,7 +409,7 @@ const RoomPage = () => {
                         : null,
                 members: [
                     {
-                        id: userId,
+                        id: String(userId), // ép sang string
                         name: JSON.parse(localStorage.getItem("user") || "{}").Ten || "Bạn",
                         email: JSON.parse(localStorage.getItem("user") || "{}").email || ""
                     }
@@ -456,9 +495,13 @@ const RoomPage = () => {
     };
     const handleOpenRoom = async (room: Room) => {
         if (!token) return;
-
         try {
             const detail = await getRoomDetailAPI(room.id, token);
+            const mappedMembers: Member[] = (detail.data.members || []).map((p: any) => ({
+                id: String(p.user_id),
+                name: p.ten_nguoi_dung || "",
+                email: p.email || ""
+            }));
 
             const surveyFromDB = detail.data.khao_sat;
             const localSurveyUrl = room.khao_sat?.public_link || localStorage.getItem("latest_survey_url") || null;
@@ -466,11 +509,9 @@ const RoomPage = () => {
             const fullRoom: RoomWithIsMine = {
                 ...room,
                 ...detail.data,
+                members: mappedMembers,
                 khao_sat: surveyFromDB
-                    ? {
-                        ...surveyFromDB,
-                        public_link: surveyFromDB.public_link || localSurveyUrl, // ưu tiên DB, fallback local
-                    }
+                    ? { ...surveyFromDB, public_link: surveyFromDB.public_link || localSurveyUrl }
                     : room.khao_sat
                         ? { ...room.khao_sat, public_link: room.khao_sat.public_link || localSurveyUrl }
                         : localSurveyUrl
@@ -480,11 +521,12 @@ const RoomPage = () => {
             };
 
             setSelectedRoom(fullRoom);
-            setMembers(detail.data.members || []);
+            setMembers(mappedMembers);
         } catch (err: any) {
             toast.error(err.message || "Không lấy được chi tiết phòng");
         }
     };
+
 
     const enterRoom = async (room: Room) => {
         if (!token) return toast.error("Bạn phải đăng nhập để tham gia phòng");
@@ -933,7 +975,7 @@ const RoomPage = () => {
                                                         {(selectedRoom?.members ?? []).slice(0, 3).map((member, index) => (
                                                             <Badge key={index} variant="secondary" className="text-xs flex items-center gap-1">
                                                                 {member.name}
-                                                                {selectedRoom?.isMine && member.id !== userId && (
+                                                                {selectedRoom?.isMine && member.id !== String(userId) && (
                                                                     <button
                                                                         onClick={() => handleRemoveMember(selectedRoom.id, member.id)}
                                                                         className="ml-1 text-red-500 hover:text-red-700 text-[10px]"
@@ -1102,7 +1144,7 @@ const RoomPage = () => {
                                                     members.map((member: Member) => (
                                                         <div key={member.id} className="flex items-center justify-between bg-muted px-3 py-2 rounded-lg">
                                                             <span className="text-sm">{member.name} ({member.email})</span>
-                                                            {selectedRoom?.isMine && member.id !== userId && (
+                                                            {selectedRoom?.isMine && member.id !== String(userId) && (
                                                                 <Button
                                                                     size="sm"
                                                                     variant="ghost"
