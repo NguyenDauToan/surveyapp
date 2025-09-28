@@ -38,7 +38,7 @@ export default function SurveyPage() {
   const [fieldErrors, setFieldErrors] = useState<Record<number, string>>({});
   const [loginOpen, setLoginOpen] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [authRequired, setAuthRequired] = useState(false); // 🔹 nếu cần login
+  const [authRequired, setAuthRequired] = useState(false); 
 
 
   // fetch survey
@@ -103,121 +103,6 @@ export default function SurveyPage() {
     }
   };
 
-// const handleChange = (cauHoiId: number, value: string | string[] | File | null) => {
-//   setAnswers((prev) =>
-//     prev.map((a) =>
-//       a.cau_hoi_id === cauHoiId
-//         ? {
-//             ...a,
-//             noi_dung: typeof value === "string" ? value : a.noi_dung,
-//             lua_chon: Array.isArray(value) ? JSON.stringify(value) : "",
-//             file: value instanceof File ? value : undefined,
-//           }
-//         : a
-//     )
-//   );
-//     setFieldErrors((prev) => {
-//       const newErrors = { ...prev };
-//       delete newErrors[cauHoiId];
-//       return newErrors;
-//     });
-//   };
-
-// const handleChange = (
-//   cauHoiId: number,
-//   value: string | File | null, // string cho radio/text, File cho file_upload
-//   type?: "multiple_choice" | "file_upload" | "text"
-// ) => {
-//   setAnswers((prev) =>
-//     prev.map((a) => {
-//       if (a.cau_hoi_id !== cauHoiId) return a;
-
-//       if (type === "multiple_choice") {
-//         return {
-//           ...a,
-//           noi_dung: "", // không dùng noi_dung
-//           lua_chon: JSON.stringify([value]), // lưu lựa chọn người dùng
-//         };
-//       }
-
-//       if (type === "file_upload") {
-//         return { ...a, file: value instanceof File ? value : undefined };
-//       }
-
-//       // text / textarea
-//       return { ...a, noi_dung: typeof value === "string" ? value : a.noi_dung };
-//     })
-//   );
-
-//   setFieldErrors((prev) => {
-//     const newErrors = { ...prev };
-//     delete newErrors[cauHoiId];
-//     return newErrors;
-//   });
-// };
-
-  // const handleSubmit = async (e: FormEvent) => {
-  //   e.preventDefault();
-  //   if (!survey) return;
-  //   setLoading(true);
-  //   setErrorMsg("");
-  //   setFieldErrors({});
-
-  //   try {
-  //     const hasFile = answers.some((a) => a.loai_cau_hoi === "FILE_UPLOAD");
-  //     const token = localStorage.getItem("token");
-
-  //     const headers: any = {};
-  //     if (hasFile) {
-  //       if (token) headers["Authorization"] = `Bearer ${token}`;
-  //     } else {
-  //       headers["Content-Type"] = "application/json";
-  //       if (token) headers["Authorization"] = `Bearer ${token}`;
-  //     }
-
-  //     const payload = hasFile
-  //       ? (() => {
-  //           const formData = new FormData();
-  //           const data = { email: email || null, answers: answers.map(({ file, ...rest }) => rest) };
-  //           formData.append("data", JSON.stringify(data));
-  //           answers.forEach((a) => {
-  //             if (a.file) formData.append(`file_${a.cau_hoi_id}`, a.file);
-  //           });
-  //           return formData;
-  //         })()
-  //       : { khao_sat_id: survey.id, email: email || null, answers };
-
-  //     await axios.post(
-  //       `https://survey-server-m884.onrender.com/api/forms/${survey.id}/submissions`,
-  //       payload,
-  //       { headers }
-  //     );
-
-  //     setSubmitted(true);
-  //   } catch (err: any) {
-  //     console.error(err);
-
-  //     const status = err.response?.status;
-  //     const msg = err.response?.data?.error || err.response?.data?.message || err.message;
-
-  //     if (status === 400 && typeof msg === "string" && msg.startsWith("Câu hỏi")) {
-  //       const match = msg.match(/Câu hỏi (\d+)/);
-  //       if (match) {
-  //         const qId = parseInt(match[1], 10);
-  //         setFieldErrors((prev) => ({ ...prev, [qId]: "Đây là câu hỏi bắt buộc" }));
-  //         setLoading(false);
-  //         return;
-  //       }
-  //     }
-
-  //     const friendlyMsg = mapErrorMessage(status, msg);
-  //     if (friendlyMsg) setErrorMsg(friendlyMsg);
-  //   } finally {
-  //     setLoading(false);
-  //   }
-  // };
-// =================bản 2
-
 // handleChange
 const handleChange = (
   cauHoiId: number,
@@ -245,18 +130,21 @@ const handleChange = (
   });
 };
 
-// handleSubmit
 const handleSubmit = async (e: FormEvent) => {
   e.preventDefault();
   if (!survey) return;
+
   setLoading(true);
   setErrorMsg("");
   setFieldErrors({});
 
   try {
-    const hasFile = answers.some((a) => a.loai_cau_hoi === "upload_file");
-    const token = localStorage.getItem("token");
+    // Fix: check đúng giá trị loai_cau_hoi
+    const hasFile = answers.some(
+      (a) => a.loai_cau_hoi.toLowerCase() === "file_upload"
+    );
 
+    const token = localStorage.getItem("token");
     const headers: any = {};
     if (token) headers["Authorization"] = `Bearer ${token}`;
 
@@ -267,19 +155,18 @@ const handleSubmit = async (e: FormEvent) => {
 
       // Chuẩn BE-23: key "data" chứa JSON string
       const data = {
+        khao_sat_id: survey.id,
         email: email || null,
         answers: answers.map(({ file, ...rest }) => rest),
-        khao_sat_id: survey.id,
       };
       formData.append("data", JSON.stringify(data));
 
-      // file riêng
+      // Append file riêng
       answers.forEach((a) => {
         if (a.file) formData.append(`file_${a.cau_hoi_id}`, a.file);
       });
 
       payload = formData;
-      // Không set Content-Type, axios tự handle
     } else {
       headers["Content-Type"] = "application/json";
       payload = { khao_sat_id: survey.id, email: email || null, answers };
@@ -292,12 +179,49 @@ const handleSubmit = async (e: FormEvent) => {
     );
 
     setSubmitted(true);
-  } catch (err: any) {
-    console.error(err);
-    setErrorMsg("Gửi khảo sát thất bại, vui lòng thử lại.");
-  } finally {
-    setLoading(false);
   }
+  catch (err: any) {
+  console.error(err);
+
+  const status = err.response?.status;
+  const msg = err.response?.data?.error || err.response?.data?.message || err.message;
+
+  // Nếu lỗi 400 liên quan tới câu hỏi bắt buộc hoặc thiếu file
+  if (status === 400 && typeof msg === "string") {
+    const matchCauHoi = msg.match(/Câu hỏi (\d+)/); 
+    if (matchCauHoi) {
+      const qId = parseInt(matchCauHoi[1], 10);
+      setFieldErrors((prev) => ({
+        ...prev,
+        [qId]: "Đây là câu hỏi bắt buộc",
+      }));
+      setLoading(false);
+      return;
+    }
+
+    // Nếu msg chứa "Thiếu file" thì gán cho câu hỏi tương ứng
+    if (msg.startsWith("Thiếu file")) {
+      const matchFile = msg.match(/(\d+)/); // lấy ID câu hỏi từ thông báo
+      if (matchFile) {
+        const qId = parseInt(matchFile[1], 10);
+        setFieldErrors((prev) => ({
+          ...prev,
+          [qId]: "Đây là câu hỏi bắt buộc",
+        }));
+        setLoading(false);
+        return;
+      }
+    }
+  }
+
+  // Các lỗi tổng thể khác
+  const friendlyMsg = mapErrorMessage(status, msg);
+  if (friendlyMsg) setErrorMsg(friendlyMsg);
+} finally {
+  setLoading(false);
+}
+
+
 };
 
 
@@ -339,7 +263,7 @@ const handleSubmit = async (e: FormEvent) => {
 
   if (submitted)
     return (
-      <div className="max-w-2xl mx-auto p-8 text-center bg-white rounded-xl shadow">
+      <div className="max-w-2xl mx-auto p-8 text-center rounded-xl shadow">
         <h2 className="text-2xl font-bold text-green-600 mb-4">
           Khảo sát của bạn đã được ghi lại!
         </h2>
@@ -367,204 +291,164 @@ const handleSubmit = async (e: FormEvent) => {
     );
 
   return (
-    <div className="max-w-3xl mx-auto p-6 bg-white shadow-lg rounded-xl my-6">
-      <h1 className="text-3xl font-bold mb-2 text-gray-800">{survey.tieu_de}</h1>
-      <p className="text-gray-600 mb-6">{survey.mo_ta}</p>
+    <div className=" bg-gradient-to-b from-[#bceae1] to-[#a8c0bc] w-full h-screen flex justify-center">
+     
+      <div className=" w-[55%] mt-10 mb-auto p-4 shadow-lg rounded-xl  bg-white">
+      <div className="bg-[#f8f8f8] p-6 rounded-[10px]">
+         <h1 className="text-3xl font-bold mb-2 text-gray-800">{survey.tieu_de}</h1>
+        <p className="text-gray-600 mb-6">{survey.mo_ta}</p>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {survey.settings.collect_email && (
-          <div>
-            <label className="block font-medium mb-1">Email (tùy chọn)</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="border border-gray-300 rounded p-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-400"
-              placeholder="abc@example.com"
-            />
-          </div>
-        )}
-
-        {survey.questions.map((q) => {
-          const props = JSON.parse(q.props || "{}");
-          const ans = answers.find((a) => a.cau_hoi_id === q.id);
-
-          return (
-            <div key={q.id} className="p-4 border border-gray-200 rounded space-y-2">
-              <label className="block font-medium text-gray-700">
-                {q.content} {props.required && <span className="text-red-500">*</span>}
-              </label>
-
-              {q.type.toLowerCase() === "fill_blank" && (
-                <input
-                  type="text"
-                  className="border border-gray-300 rounded p-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-400"
-                  value={ans?.noi_dung ?? ""}
-                  onChange={(e) => handleChange(q.id, e.target.value)}
-                  placeholder="Nhập câu trả lời..."
-                />
-              )}
-
-{/* {q.type.toLowerCase() === "multiple_choice" && (
-  <div className="space-y-1">
-    {props.options?.map(opt => {
-      const ans = answers.find(a => a.cau_hoi_id === q.id);
-      return (
-        <label key={opt} className="flex items-center gap-2">
-          <input
-            type="radio"
-            name={`multiple_choice_${q.id}`}
-            value={opt}
-            checked={ans?.noi_dung === opt} // chỉ so sánh với noi_dung
-            onChange={() => handleChange(q.id, opt, "multiple_choice", props.options)}
-          />
-          <span className="text-gray-700">{opt}</span>
-        </label>
-      );
-    })}
-  </div>
-)} */}
-{q.type.toLowerCase() === "multiple_choice" && (
-  <div className="space-y-1">
-    {props.options?.map((opt: string) => {
-      const ans = answers.find((a) => a.cau_hoi_id === q.id);
-      return (
-        <label key={opt} className="flex items-center gap-2">
-          <input
-            type="radio"
-            name={`multiple_choice_${q.id}`}
-            value={opt}
-            checked={ans?.lua_chon === JSON.stringify([opt])}
-            onChange={() => handleChange(q.id, opt, "multiple_choice")}
-          />
-          <span className="text-gray-700">{opt}</span>
-        </label>
-      );
-    })}
-  </div>
-)}
-              {q.type.toLowerCase() === "true_false" && (
-                <div className="flex gap-4">
-                  {["Có", "Không"].map((val) => (
-                    <label key={val} className="flex items-center gap-2">
-                      <input
-                        type="radio"
-                        name={`true_false_${q.id}`}
-                        value={val}
-                        checked={ans?.noi_dung === val}
-                        onChange={() => handleChange(q.id, val)}
-                      />
-                      <span className="text-gray-700">{val}</span>
-                    </label>
-                  ))}
-                </div>
-              )}
-
-              {q.type.toLowerCase() === "rating" && (
-                <div className="flex gap-1">
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <svg
-                      key={star}
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 20 20"
-                      fill={Number(ans?.noi_dung) >= star ? "yellow" : "gray"}
-                      className="w-6 h-6 cursor-pointer transition-colors hover:fill-yellow-400"
-                      onClick={() => handleChange(q.id, String(star))}
-                    >
-                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.957a1 1 0 00.95.69h4.15c.969 0 1.371 1.24.588 1.81l-3.36 2.44a1 1 0 00-.364 1.118l1.287 3.957c.3.921-.755 1.688-1.54 1.118l-3.36-2.44a1 1 0 00-1.176 0l-3.36 2.44c-.784.57-1.838-.197-1.539-1.118l1.287-3.957a1 1 0 00-.364-1.118L2.025 9.384c-.783-.57-.38-1.81.588-1.81h4.15a1 1 0 00.95-.69l1.286-3.957z" />
-                    </svg>
-                  ))}
-                </div>
-              )}
-
-              {/* {q.type.toLowerCase() === "file_upload" && (
-                <div className="space-y-2">
-                  {ans?.file ? (
-                    <div className="flex items-center justify-between bg-gray-100 p-2 rounded">
-                      <span className="text-sm text-gray-700">{ans.file.name}</span>
-                      <button
-                        type="button"
-                        className="text-red-500 text-sm"
-                        onClick={() => handleChange(q.id, "")}
-                      >
-                        Xóa
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="relative w-full">
-                      <label className="block w-full border border-gray-300 rounded p-2 text-center cursor-pointer bg-white hover:bg-gray-50">
-                        Chọn file
-                        <input
-                          type="file"
-                          className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer"
-                          // onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                          //   handleChange(q.id, e.target.files?.[0] || null)
-                          // }
-                          onChange={(e: ChangeEvent<HTMLInputElement>) =>
-  handleChange(q.id, e.target.files?.[0] || null, "file_upload")
-}
-                        />
-                      </label>
-                    </div>
-                  )}
-                </div>
-              )} */}
-{q.type.toLowerCase() === "file_upload" && (
-  <div className="space-y-2">
-    {ans?.file ? (
-      <div className="flex items-center justify-between bg-gray-100 p-2 rounded">
-        <span className="text-sm text-gray-700">{ans.file.name}</span>
-        <button
-          type="button"
-          className="text-red-500 text-sm"
-          onClick={() => handleChange(q.id, null, "file_upload")}
-        >
-          Xóa
-        </button>
-      </div>
-    ) : (
-      <label className="block w-full border border-gray-300 rounded p-2 text-center cursor-pointer bg-white hover:bg-gray-50 relative overflow-hidden">
-        Chọn file
-        <input
-          type="file"
-          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-          onChange={(e: ChangeEvent<HTMLInputElement>) =>
-            handleChange(q.id, e.target.files?.[0] || null, "file_upload")
-          }
-        />
-      </label>
-    )}
-  </div>
-)}
-
-
-              {fieldErrors[q.id] && (
-                <p className="text-red-500 text-sm">{fieldErrors[q.id]}</p>
-              )}
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {survey.settings.collect_email && (
+            <div>
+              <label className="block font-medium mb-1">Email (tùy chọn)</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="border border-gray-300 rounded p-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-400"
+                placeholder="abc@example.com"
+              />
             </div>
-          );
-        })}
+          )}
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 rounded-lg transition disabled:opacity-50"
-        >
-          {loading ? "Đang gửi..." : "Gửi khảo sát"}
-        </button>
-      </form>
+          {survey.questions.map((q) => {
+            const props = JSON.parse(q.props || "{}");
+            const ans = answers.find((a) => a.cau_hoi_id === q.id);
 
-      {errorMsg && <div className="text-red-600 mt-4 text-center text-sm">{errorMsg}</div>}
+            return (
+<div
+  key={q.id}
+  className="p-4 border border-gray-200 border-l-4 border-l-[#3fa194] rounded space-y-2 bg-white"
+>                <label className="block font-medium text-gray-700">
+                  {q.content} {props.required && <span className="text-red-500">*</span>}
+                </label>
 
-<LoginDialog
-  open={loginOpen}
-  onOpenChange={(open) => {
-    setLoginOpen(open);
-    if (!open) fetchSurveyAfterLogin();
-  }}
-  redirectTo={window.location.pathname + window.location.search} // quay về trang hiện tại
-/>
+                {q.type.toLowerCase() === "fill_blank" && (
+                  <input
+                    type="text"
+                    className="border border-gray-300 rounded p-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    value={ans?.noi_dung ?? ""}
+                    onChange={(e) => handleChange(q.id, e.target.value)}
+                    placeholder="Nhập câu trả lời..."
+                  />
+                )}
 
+  {q.type.toLowerCase() === "multiple_choice" && (
+    <div className="space-y-1">
+      {props.options?.map((opt: string) => {
+        const ans = answers.find((a) => a.cau_hoi_id === q.id);
+        return (
+          <label key={opt} className="flex items-center gap-2">
+            <input
+              type="radio"
+              name={`multiple_choice_${q.id}`}
+              value={opt}
+              checked={ans?.lua_chon === JSON.stringify([opt])}
+              onChange={() => handleChange(q.id, opt, "multiple_choice")}
+            />
+            <span className="text-gray-700">{opt}</span>
+          </label>
+        );
+      })}
     </div>
+  )}
+                {q.type.toLowerCase() === "true_false" && (
+                  <div className="flex gap-4">
+                    {["Có", "Không"].map((val) => (
+                      <label key={val} className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name={`true_false_${q.id}`}
+                          value={val}
+                          checked={ans?.noi_dung === val}
+                          onChange={() => handleChange(q.id, val)}
+                        />
+                        <span className="text-gray-700">{val}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+
+                {q.type.toLowerCase() === "rating" && (
+                  <div className="flex gap-1">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <svg
+                        key={star}
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 20 20"
+                        fill={Number(ans?.noi_dung) >= star ? "yellow" : "gray"}
+                        className="w-6 h-6 cursor-pointer transition-colors hover:fill-yellow-400"
+                        onClick={() => handleChange(q.id, String(star))}
+                      >
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.957a1 1 0 00.95.69h4.15c.969 0 1.371 1.24.588 1.81l-3.36 2.44a1 1 0 00-.364 1.118l1.287 3.957c.3.921-.755 1.688-1.54 1.118l-3.36-2.44a1 1 0 00-1.176 0l-3.36 2.44c-.784.57-1.838-.197-1.539-1.118l1.287-3.957a1 1 0 00-.364-1.118L2.025 9.384c-.783-.57-.38-1.81.588-1.81h4.15a1 1 0 00.95-.69l1.286-3.957z" />
+                      </svg>
+                    ))}
+                  </div>
+                )}
+          
+  {q.type.toLowerCase() === "file_upload" && (
+    <div className="space-y-2">
+      {ans?.file ? (
+        <div className="flex items-center justify-between bg-gray-100 p-2 rounded">
+          <span className="text-sm text-gray-700">{ans.file.name}</span>
+          <button
+            type="button"
+            className="text-red-500 text-sm"
+            onClick={() => handleChange(q.id, null, "file_upload")}
+          >
+            Xóa
+          </button>
+        </div>
+      ) : (
+        <label className="block w-full border border-gray-300 rounded p-2 text-center cursor-pointer bg-white hover:bg-gray-50 relative overflow-hidden">
+          Chọn file
+          <input
+            type="file"
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+            onChange={(e: ChangeEvent<HTMLInputElement>) =>
+              handleChange(q.id, e.target.files?.[0] || null, "file_upload")
+            }
+          />
+        </label>
+      )}
+    </div>
+  )}
+
+
+                {fieldErrors[q.id] && (
+                  <p className="text-red-500 text-sm">{fieldErrors[q.id]}</p>
+                )}
+              </div>
+            );
+          })}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-[#3fa194] hover:bg-[#357e73] text-white font-semibold py-3 rounded-lg transition disabled:opacity-50"
+          >
+            {loading ? "Đang gửi..." : "Gửi khảo sát"}
+          </button>
+        </form>
+
+        {errorMsg && <div className="text-red-600 mt-4 text-center text-sm">{errorMsg}</div>}
+
+  <LoginDialog
+    open={loginOpen}
+    onOpenChange={(open) => {
+      setLoginOpen(open);
+      if (!open) fetchSurveyAfterLogin();
+    }}
+    redirectTo={window.location.pathname + window.location.search} 
+  />
+      </div>
+       
+
+       
+      </div>
+      
+    </div>
+  
   );
 }
