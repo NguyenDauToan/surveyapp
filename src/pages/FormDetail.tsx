@@ -72,7 +72,7 @@ const handleCloneClick = () => {
             >
               Tạo bản sao
             </TabsTrigger>
-            <button onClick={() => navigate(`/survey/edit/${survey.id}`)}>
+            <button onClick={() => navigate(`/survey/edit/${form.id}`)}>
               Sửa
             </button>
           </TabsList>

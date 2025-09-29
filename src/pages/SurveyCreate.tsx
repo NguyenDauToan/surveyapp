@@ -11,7 +11,7 @@ import { Plus, Trash2, Eye, Save, Type, List, Star, ToggleLeft } from "lucide-re
 import { toast } from "sonner";
 import { createSurveyAPI, addQuestionAPI } from "@/api/Api";
 import Header from "@/components/Header";
-import { Image } from "lucide-react"; // 🟢 icon hình ảnh
+import { Image } from "lucide-react"; 
 import axios from "axios";
 
 import { shareFormAPI } from "@/api/Api";
@@ -30,13 +30,27 @@ interface Survey {
   questions: Question[];
 }
 
-const SurveyCreate = () => {
-  const [survey, setSurvey] = useState<Survey>({
-    title: "",
-    description: "",
-    questions: [],
-  });
-  const [surveyLink, setSurveyLink] = useState<string | null>(null);
+interface SurveyCreateProps {
+  existingSurvey?: any; // optional, nếu có sẵn khảo sát
+}
+
+// const SurveyCreate = () => {
+//   const [survey, setSurvey] = useState<Survey>({
+//     title: "",
+//     description: "",
+//     questions: [],
+//   });
+const SurveyCreate = ({ existingSurvey }: SurveyCreateProps) => {
+  const [survey, setSurvey] = useState<Survey>(
+    existingSurvey || {
+      title: "",
+      description: "",
+      questions: [],
+      settings: { collect_email: false },
+      end_date: ""
+    }
+  );
+    const [surveyLink, setSurveyLink] = useState<string | null>(null);
 
   const [maxResponses, setMaxResponses] = useState<number | null>(null);
   const [isLimited, setIsLimited] = useState(false);
@@ -114,16 +128,16 @@ const SurveyCreate = () => {
   };
 
   const saveSurvey = async () => {
-    console.log("📌 [saveSurvey] Start saving survey");
-    console.log("📌 [saveSurvey] Survey state:", survey);
-    console.log("📌 [saveSurvey] Settings:", settings);
+    console.log(" [saveSurvey] Start saving survey");
+    console.log(" [saveSurvey] Survey state:", survey);
+    console.log(" [saveSurvey] Settings:", settings);
 
     if (!survey.title) return toast.error("Nhập tiêu đề");
     if (survey.questions.length === 0) return toast.error("Chưa có câu hỏi");
 
     const rawToken = localStorage.getItem("token");
     const token = rawToken && rawToken !== "null" && rawToken !== "undefined" ? rawToken : undefined;
-    console.log("📌 [saveSurvey] Token:", token);
+    console.log(" [saveSurvey] Token:", token);
 
     try {
       // ===== Tạo khảo sát =====
@@ -376,9 +390,9 @@ await axios.put(
               
               {newQuestion.type === "file-upload" && (
                 <div>
-                  <Label>Người trả lời sẽ tải ảnh lên</Label>
+                  <Label>Người trả lời sẽ tải file lên</Label>
                   <p className="text-sm text-muted-foreground">
-                    Chấp nhận file ảnh: JPG, PNG (tối đa 5MB)
+                    Chấp nhận file: JPG, PNG , pdf
                   </p>
                   {/* Khi tạo câu hỏi chỉ preview, không upload thật */}
                   <Input type="file" accept="image/*" disabled />

@@ -9,6 +9,8 @@ import Demo from "./pages/Demo";
 import NotFound from "./pages/NotFound";
 import LoginDialog from "./layout/LoginDialog";
 import SurveyCreate from "./pages/SurveyCreate";
+import SurveyEditPage from "./pages/SurveyEditPage";
+
 import MySurveys from "./pages/MySurveys";
 import Room from "./pages/Room";
 import Archive from "./pages/ArchivedRoomsDialog";
@@ -48,6 +50,7 @@ const App = () => (
 
         {/* <Route path="/survey/:id" element={<SurveyPageWrapper />} /> */}
         <Route path="/survey/:id/clone" element={<CloneSurveyPage />} />
+        <Route path="/survey/edit/:id" element={<SurveyEditPage />} />
 
        
           {/* Admin routes */}
