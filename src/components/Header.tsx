@@ -37,6 +37,15 @@ const Header = () => {
           <span className="font-bold text-xl text-foreground">SurveyPro</span>
         </Link>
 
+//updateform_clone_formDetail_editpage
+
+        {/* Desktop Nav */}
+        <nav>
+          <Link to='/demo'>
+          
+           </Link>
+        </nav>
+    //main
         {/* Actions */}
         <div className="flex items-center gap-3">
           {!user ? (
@@ -67,6 +76,18 @@ const Header = () => {
               </div>
               <UserProfileModal open={profileOpen} onOpenChange={setProfileOpen} />
             </>
+//updateform_clone_formDetail_editpage
+
+          ) : (
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-medium text-foreground">
+                👋 Xin chào: {user.ten || "User"}
+              </span>
+              <Button variant="ghost" size="icon" onClick={handleLogout}>
+                <LogOut className="h-4 w-4" />
+              </Button>
+            </div>
+//main
           )}
 
           {/* Mobile menu button */}

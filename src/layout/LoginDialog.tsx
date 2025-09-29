@@ -45,34 +45,36 @@ export default function LoginDialog({ open, onOpenChange,redirectTo  }: LoginDia
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const googleButtonRef = useRef<HTMLDivElement | null>(null);
-
+  const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8080/api";
   const handleCredentialResponse = async (response: GoogleCredentialResponse) => {
     console.log("Credential response:", response);
     if (!response.credential) return console.error("❌ Không nhận được ID Token từ Google");
 
     try {
-      const res = await fetch(
-        "https://survey-server-m884.onrender.com/api/auth/google/login",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id_token: response.credential }),
-        }
-      ); 
+      const res = await fetch(`${API_BASE}/auth/google/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id_token: response.credential }),
+      });
+
       if (!res.ok) {
         const err = await res.text();
         console.error("Backend error:", err);
         throw new Error(err);
       }
 
-      const data: BackendResponse = await res.json();
+      const data = await res.json();
 
       if (data.user && data.token) {
         const user = {
-          ...data.user,
-          Ten: data.user.ten,
+          id: data.user.id,
+          ten: data.user.ten,
+          email: data.user.email,
+          vai_tro: data.user.vai_tro,
+          ngay_tao: data.user.ngay_tao,
           role: data.user.vai_tro ? "admin" : "user",
         };
+//updateform_clone_formDetail_editpage
       
         dispatch(login({ user, token: data.token })); 
       
@@ -98,6 +100,20 @@ export default function LoginDialog({ open, onOpenChange,redirectTo  }: LoginDia
       }
 
       else {
+
+
+        dispatch(login({ user, token: data.token }));
+
+        localStorage.setItem("token", data.token);
+        localStorage.setItem("user", JSON.stringify(user));
+        localStorage.setItem("user_id", String(user.id));
+
+        if (user.role === "admin") navigate("/admin");
+        else navigate("/");
+
+        onOpenChange(false);
+      } else {
+//main
         alert("Đăng nhập thất bại");
       }
     } catch (err) {
@@ -121,7 +137,7 @@ export default function LoginDialog({ open, onOpenChange,redirectTo  }: LoginDia
 
         const script = document.createElement("script");
         script.src = "https://accounts.google.com/gsi/client";
-        script.crossOrigin = "anonymous"; 
+        script.crossOrigin = "anonymous";
         script.id = "google-client-script";
         script.async = true;
         script.defer = true;
@@ -138,7 +154,6 @@ export default function LoginDialog({ open, onOpenChange,redirectTo  }: LoginDia
         client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID as string,
         callback: handleCredentialResponse,
         ux_mode: "popup",
-
       });
 
       window.google.accounts.id.renderButton(googleButtonRef.current, {
@@ -161,7 +176,7 @@ export default function LoginDialog({ open, onOpenChange,redirectTo  }: LoginDia
       (document.activeElement as HTMLElement)?.blur();
     }, 0);
   };
-
+  
   return (
     <Dialog
       open={open}
