@@ -509,4 +509,25 @@ export const getFormSubmissionsAPI = async (
   }
 };
 
+
+export const updateQuestionAPI = async (
+  questionId: number,
+  content: string,
+  props?: object
+) => {
+  const token = localStorage.getItem("token");
+  if (!token) throw new Error("Bạn chưa đăng nhập");
+
+  const body: any = { content };
+  if (props) body.props = props;
+
+  const res = await axios.put(
+    `https://survey-server-m884.onrender.com/api/questions/${questionId}`,
+    body,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+
+  return res.data; // { message: "updated" }
+};
+
 export default axiosClient;

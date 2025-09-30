@@ -74,13 +74,7 @@ const handleCloneClick = () => {
   <TabsTrigger value="submission" className="px-4 py-2 rounded-lg">
     Danh sách phản hồi
   </TabsTrigger>
-  
- {form && (
-  <CloneFormTab formId={form.id} token={token} />
-)}
-
-
-  {/* Nút sửa */}
+{/* Nút sửa */}
   {form && (
     <button
       onClick={() => navigate(`/survey/edit/${form.id}`)}
@@ -89,8 +83,12 @@ const handleCloneClick = () => {
       Sửa
     </button>
   )}
+ {form && (
+  <CloneFormTab formId={form.id} token={token} />
+)}
+
   {form &&(
-            <DeleteFormButton id={form.id} />
+    <DeleteFormButton id={form.id} />
 
   )}
 </TabsList>
