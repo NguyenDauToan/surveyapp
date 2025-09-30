@@ -50,7 +50,7 @@ const App = () => (
 
         {/* <Route path="/survey/:id" element={<SurveyPageWrapper />} /> */}
         <Route path="/survey/:id/clone" element={<CloneSurveyPage />} />
-        <Route path="/survey/edit/:id" element={<SurveyEditPage />} />
+        <Route path="/survey/edit/:id" element={<SurveyEditPage existingSurvey={undefined} />} />
 
        
           {/* Admin routes */}

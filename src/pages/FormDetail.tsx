@@ -6,7 +6,10 @@ import { getFormDetail } from "@/api/Api";
 import DashboardTab from "./DashboardTab";
 import SubmissionListTab from "./SubmissionListTab";
 import { useNavigate } from "react-router-dom";
-
+import CloneFormButton from "./CloneFormButton";
+import ViewFormButton from "./ViewFormButton";
+import CloneFormTab from "./CloneFormTab";
+import DeleteFormButton from "./DeleteFormButton";
 import {
   Dialog,
   DialogContent,
@@ -49,7 +52,7 @@ const FormDetailDialog = ({ id, open, onOpenChange }: Props) => {
 const handleCloneClick = () => {
   if (!id) return; // tránh lỗi nếu id null
   navigate(`/survey/${id}/clone`);
-};
+};      
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto p-6 ">
@@ -62,20 +65,37 @@ const handleCloneClick = () => {
           className="mt-6"
         >
           <TabsList className="bg-gray-100 rounded-lg p-1 shadow-inner">
-            <TabsTrigger value="detail" className="px-4 py-2 rounded-lg">Chi tiết khảo sát</TabsTrigger>
-            <TabsTrigger value="dashboard" className="px-4 py-2 rounded-lg">Responses Dashboard</TabsTrigger>
-            <TabsTrigger value="submission" className="px-4 py-2 rounded-lg">Danh sách phản hồi</TabsTrigger>
-            <TabsTrigger
-              value="cloneform"
-              className="px-4 py-2 rounded-lg"
-              onClick={handleCloneClick} // <--- click sẽ điều hướng
-            >
-              Tạo bản sao
-            </TabsTrigger>
-            <button onClick={() => navigate(`/survey/edit/${form.id}`)}>
-              Sửa
-            </button>
-          </TabsList>
+  <TabsTrigger value="detail" className="px-4 py-2 rounded-lg">
+    Chi tiết khảo sát
+  </TabsTrigger>
+  <TabsTrigger value="dashboard" className="px-4 py-2 rounded-lg">
+    Responses Dashboard
+  </TabsTrigger>
+  <TabsTrigger value="submission" className="px-4 py-2 rounded-lg">
+    Danh sách phản hồi
+  </TabsTrigger>
+  
+ {form && (
+  <CloneFormTab formId={form.id} token={token} />
+)}
+
+
+  {/* Nút sửa */}
+  {form && (
+    <button
+      onClick={() => navigate(`/survey/edit/${form.id}`)}
+      className="px-4 py-2 rounded-lg bg-green-500 text-white hover:bg-green-600 transition ml-2"
+    >
+      Sửa
+    </button>
+  )}
+  {form &&(
+            <DeleteFormButton id={form.id} />
+
+  )}
+</TabsList>
+
+
 
           {/* Tab 1: Chi tiết khảo sát */}
           <TabsContent value="detail" className="mt-6">
@@ -157,7 +177,6 @@ const handleCloneClick = () => {
       </DialogContent>
     </Dialog>
   );
-
 };
 
 export default FormDetailDialog;
