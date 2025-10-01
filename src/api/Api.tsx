@@ -281,9 +281,9 @@ export const enterRoomAPI = async (roomId: number, password?: string, token?: st
 // api/Api.ts
 export const getRoomParticipantsAPI = async (roomId: number, token: string) => {
   const res = await axios.get(`${API_BASE}/rooms/${roomId}/participants`, {
-    headers: { Authorization: `Bearer ${token}` }
+    headers: { Authorization: `Bearer ${token}` },
   });
-  return res.data.participants; // [{id, name, email, ...}, ...]
+  return res.data.participants;
 };
 
 

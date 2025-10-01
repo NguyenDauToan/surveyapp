@@ -18,7 +18,7 @@ interface ArchivedSurvey {
 }
 
 export default function ArchivedSurveysDialog() {
-  const API_BASE = "https://survey-server-m884.onrender.com/api";
+  const API_BASE = "http://localhost:8080/api";
 
   const [open, setOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
