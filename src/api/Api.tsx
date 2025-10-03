@@ -3,7 +3,7 @@ import axios, { AxiosInstance } from "axios";
 import { GoogleLogin, CredentialResponse } from "@react-oauth/google";
 // =================== CONFIG ===================
 // Vite expose biến môi trường qua import.meta.env
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8080/api";
+const API_BASE = import.meta.env.VITE_API_BASE || "https://survey-server-m884.onrender.com/api";
 
 const axiosClient: AxiosInstance = axios.create({
   baseURL: API_BASE,
@@ -59,7 +59,7 @@ interface Survey {
   mo_ta?: string;
   public_link?: string | null;
 }
-interface EnterRoomResponse {
+export interface EnterRoomResponse {
   status: string;
   room: {
     id: number;
@@ -81,21 +81,37 @@ export const enterRoomByShareURL = async (
   shareURL: string,
   password?: string
 ): Promise<EnterRoomResponse> => {
-  const token = localStorage.getItem("token"); // 👈 lấy token sau khi login
   const body = password ? { password } : {};
+  const token = localStorage.getItem("token");
 
-  const res = await axios.post<EnterRoomResponse>(
-    `${API_BASE}/rooms/share/${shareURL}/enter`,
-    body,
-    {
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  console.log("🔹 [enterRoomByShareURL] Headers:", headers);
+  console.log("🔹 [enterRoomByShareURL] Body:", body);
+
+  try {
+    const res = await axios.post<EnterRoomResponse>(
+      `${API_BASE}/rooms/share/${shareURL}/enter`,
+      body,
+      { headers }
+    );
+    console.log("✅ [enterRoomByShareURL] Response:", res.data);
+    return res.data;
+  } catch (error: any) {
+    if (axios.isAxiosError(error)) {
+      console.error("❌ [enterRoomByShareURL] Axios error status:", error.response?.status);
+      console.error("❌ [enterRoomByShareURL] Axios error data:", error.response?.data);
+    } else {
+      console.error("❌ [enterRoomByShareURL] Unknown error:", error);
     }
-  );
-
-  return res.data;
+    throw error;
+  }
 };
 // =================== SURVEY & QUESTION ===================
 export const createSurveyAPI = async (token: string, payload: any) => {
@@ -370,7 +386,7 @@ export const getRoomDetailAPI = async (roomId: number, token: string) => {
   // Log khao_sat riêng
   console.log("KhaoSat in data:", data?.data?.khao_sat);
 
-  return data; // { data: { id, ten_room, mo_ta, khao_sat, share_url, members, ... } }
+  return data; 
 };
 
 
@@ -504,13 +520,17 @@ export const fetchRoomParticipants = async (roomId: number, token: string) => {
   return res.data.participants;
 };
 
-
-export const removeMemberAPI = async (roomId: number, token: string, member: string) => {
-  const res = await axios.delete(`${API_BASE}/rooms/${roomId}/members`, {
+// Api.tsx
+export const removeMemberAPI = async (roomId: number, token: string, memberId: string) => {
+  console.log("🚀 removeMemberAPI called", { roomId, memberId });
+  const res = await axios.delete(`${API_BASE}/rooms/${roomId}/removemem/${memberId}`, {
     headers: { Authorization: `Bearer ${token}` },
-    data: { member },
   });
   return res.data;
 };
+
+
+
+
 
 export default axiosClient;

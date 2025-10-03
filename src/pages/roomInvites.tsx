@@ -2,7 +2,7 @@
 import axios from "axios";
 import { toast } from "sonner";
 
-const API_BASE = "http://localhost:8080/api";
+const API_BASE = "https://survey-server-m884.onrender.com/api";
 
 export const handleAcceptInvite = async (inviteId: number, token: string, setInvites: any) => {
   try {
