@@ -33,9 +33,10 @@ interface QuestionProps {
 const SurveyEditPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-    const location = useLocation();
+  const location = useLocation();
   const stateSurvey = location.state?.survey; // nhận dữ liệu từ Dialog
- const [survey, setSurvey] = useState<Survey>({
+
+  const [survey, setSurvey] = useState<Survey>({
     title: "",
     description: "",
     questions: [],
@@ -61,95 +62,63 @@ const SurveyEditPage = () => {
   ];
 
   // ================== Load survey hiện có ==================
-useEffect(() => {
-  if (stateSurvey) {
-    setSurvey({
-      title: stateSurvey.title || "",
-      description: stateSurvey.description || "",
-      questions: (stateSurvey.questions || []).map((q: any) => ({
-        id: q.id.toString(),
-        title: q.content || q.title || "",
-        type: q.type || "text",
-        required: q.required || false,
-        options: q.options?.map((o: any) => o.noi_dung || o) || [],
-      })),
-    });
-    setSurveyLink(stateSurvey.public_link || null);
-
-    console.log("Initial survey from state:", stateSurvey);
-    console.log("Mapped survey:", {
-      title: stateSurvey.title,
-      description: stateSurvey.description,
-      questions: (stateSurvey.questions || []).map((q: any) => ({
-        id: q.id.toString(),
-        title: q.content || q.title || "",
-        type: q.type || "text",
-        required: q.required || false,
-        options: q.options?.map((o: any) => o.noi_dung || o) || [],
-      })),
-    });
-
-    return; // không load API
-  }
-
-  if (!id || !token) return;
-
-  setLoading(true);
-  axios.get(`https://survey-server-m884.onrender.com/api/forms/${id}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-    .then(res => {
-      const data = res.data;
-
-      const questions: Question[] = (data.cau_hois || []).map((q: any) => {
-        let props: QuestionProps = {};
-        try { props = q.props_json ? JSON.parse(q.props_json) : {}; } 
-        catch { props = {}; }
-
-        return {
+  useEffect(() => {
+    if (stateSurvey) {
+      setSurvey({
+        title: stateSurvey.title || "",
+        description: stateSurvey.description || "",
+        questions: (stateSurvey.questions || []).map((q: any) => ({
           id: q.id.toString(),
-          title: q.noi_dung || "",
-          type: q.loai_cau_hoi === "MULTIPLE_CHOICE" ? "multiple-choice" :
-                q.loai_cau_hoi === "FILL_BLANK" ? "text" :
-                q.loai_cau_hoi === "RATING" ? "rating" :
-                q.loai_cau_hoi === "TRUE_FALSE" ? "yes-no" :
-                q.loai_cau_hoi === "FILE_UPLOAD" ? "file-upload" : "text",
-          required: props.required || false,
-          options: props.options || [],
-        };
+          title: q.content || q.title || "",
+          type: q.type || "text",
+          required: q.required || false,
+          options: q.options?.map((o: any) => o.noi_dung || o) || [],
+        })),
       });
-
-      const mappedSurvey = {
-        title: data.tieu_de || "",
-        description: data.mo_ta || "",
-        questions,
-      };
-
-      setSurvey(mappedSurvey);
-      setSurveyLink(data.public_link || null);
-
-      console.log("Initial survey from API:", data);
-      console.log("Mapped survey:", mappedSurvey);
-    })
-    .catch(err => {
-      console.error(err.response?.data || err.message);
-      toast.error("Không thể tải khảo sát");
-    })
-    .finally(() => setLoading(false));
-}, [id, token, stateSurvey]);
-
-
-  // ================== Map type FE -> BE ==================
-  const mapType = (type: string) => {
-    switch (type) {
-      case "text": return "FILL_BLANK";
-      case "multiple-choice": return "MULTIPLE_CHOICE";
-      case "rating": return "RATING";
-      case "yes-no": return "TRUE_FALSE";
-      case "file-upload": return "FILE_UPLOAD";
-      default: return "FILL_BLANK";
+      setSurveyLink(stateSurvey.public_link || null);
+      return; // không load API
     }
-  };
+
+    if (!id || !token) return;
+
+    setLoading(true);
+    axios.get(`https://survey-server-m884.onrender.com/api/forms/${id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(res => {
+        const data = res.data;
+
+        const questions: Question[] = (data.cau_hois || []).map((q: any) => {
+          let props: QuestionProps = {};
+          try { props = q.props_json ? JSON.parse(q.props_json) : {}; } 
+          catch { props = {}; }
+
+          return {
+            id: q.id.toString(),
+            title: q.noi_dung || "",
+            // === Chỉnh ở đây: giữ nguyên loại, format FE ===
+            type: q.loai_cau_hoi.toLowerCase().replace("_", "-"),
+            required: props.required || false,
+            options: props.options || [],
+          };
+        });
+
+        const mappedSurvey = {
+          title: data.tieu_de || "",
+          description: data.mo_ta || "",
+          questions,
+        };
+
+        setSurvey(mappedSurvey);
+        setSurveyLink(data.public_link || null);
+      })
+      .catch(err => {
+        console.error(err.response?.data || err.message);
+        toast.error("Không thể tải khảo sát");
+      })
+      .finally(() => setLoading(false));
+  }, [id, token, stateSurvey]);
+
 
   // ================== Add/Remove question ==================
   const addQuestion = () => {
@@ -170,60 +139,58 @@ useEffect(() => {
     setSurvey(prev => ({ ...prev, questions: prev.questions.filter(q => q.id !== id) }));
     toast.success("Đã xóa câu hỏi!");
   };
+
   // ================== Save survey ==================
-const saveSurvey = async () => {
-  if (!survey.title) return toast.error("Nhập tiêu đề khảo sát");
-  if (survey.questions.length === 0) return toast.error("Chưa có câu hỏi nào");
+  const saveSurvey = async () => {
+    if (!survey.title) return toast.error("Nhập tiêu đề khảo sát");
+    if (survey.questions.length === 0) return toast.error("Chưa có câu hỏi nào");
 
-  try {
-    // --- Xác định câu hỏi cũ và mới ---
-    const oldQuestionIds = (stateSurvey?.questions || []).map((q: any) => Number(q.id));
-    const updatedQuestions = survey.questions.map((q, index) => {
-      const isOld = oldQuestionIds.includes(Number(q.id));
-      return {
-        id: isOld ? Number(q.id) : undefined, // chỉ question cũ có id
-        content: q.title,
-        loai_cau_hoi: mapType(q.type),
-        thu_tu: index,
-        props: { required: q.required, ...(q.options ? { options: q.options } : {}) }
+    try {
+      const oldQuestionIds = (stateSurvey?.questions || []).map((q: any) => Number(q.id));
+      const updatedQuestions = survey.questions.map((q, index) => {
+        const isOld = oldQuestionIds.includes(Number(q.id));
+        return {
+          id: isOld ? Number(q.id) : undefined,
+          content: q.title,
+          // === Chỉnh ở đây: giữ nguyên type, format backend ===
+          loai_cau_hoi: q.type.toUpperCase().replace("-", "_"),
+          thu_tu: index,
+          props: { required: q.required, ...(q.options ? { options: q.options } : {}) }
+        };
+      });
+
+      const deletedQuestions = (stateSurvey?.questions || [])
+        .filter(q => !survey.questions.some(sq => Number(sq.id) === Number(q.id)))
+        .map(q => ({ id: Number(q.id), delete: true }));
+
+      const payload = {
+        title: survey.title,
+        description: survey.description,
+        settings: { shuffleQuestions: true, theme: "light" },
+        end_date: stateSurvey?.end_date || new Date().toISOString(),
+        questions: [...updatedQuestions, ...deletedQuestions]
       };
-    });
 
-    // --- Tìm các question đã bị xóa ---
-    const deletedQuestions = (stateSurvey?.questions || [])
-      .filter(q => !survey.questions.some(sq => Number(sq.id) === Number(q.id)))
-      .map(q => ({ id: Number(q.id), delete: true }));
+      console.log("Payload sent:", JSON.stringify(payload, null, 2));
 
-    // --- Payload gửi BE ---
-    const payload = {
-      title: survey.title,
-      description: survey.description,
-      settings: { shuffleQuestions: true, theme: "light" },
-      end_date: stateSurvey?.end_date || new Date().toISOString(),
-      questions: [...updatedQuestions, ...deletedQuestions]
-    };
+      const res = await axios.put(
+        `https://survey-server-m884.onrender.com/api/forms/${id}/updateform`,
+        payload,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
 
-    console.log("Payload sent:", JSON.stringify(payload, null, 2));
+      if (res.status === 200) {
+        toast.success("Cập nhật khảo sát thành công!");
+        if (res.data.public_link) setSurveyLink(res.data.public_link);
+      } else {
+        toast.error(res.data.message || "Lỗi khi lưu khảo sát");
+      }
 
-    const res = await axios.put(
-      `https://survey-server-m884.onrender.com/api/forms/${id}/updateform`,
-      payload,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-
-    if (res.status === 200) {
-      toast.success("Cập nhật khảo sát thành công!");
-      if (res.data.public_link) setSurveyLink(res.data.public_link);
-    } else {
-      toast.error(res.data.message || "Lỗi khi lưu khảo sát");
+    } catch (err: any) {
+      console.error(err.response?.data || err.message);
+      toast.error(err.response?.data?.message || err.message || "Lỗi khi lưu khảo sát");
     }
-
-  } catch (err: any) {
-    console.error(err.response?.data || err.message);
-    toast.error(err.response?.data?.message || err.message || "Lỗi khi lưu khảo sát");
-  }
-};
-
+  };
 
   return (
     <div className="min-h-screen bg-background">
