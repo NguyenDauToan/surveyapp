@@ -927,67 +927,67 @@ const RoomPage = () => {
 
     const handleLockRoom = async (roomId: number, lock: boolean) => {
         if (!token) return toast.error("Bạn phải đăng nhập để thực hiện");
-      
+
         try {
-          setIsLocking(true);
-      
-          let res;
-          if (lock) {
-            // Lock room
-            res = await axios.post(`${API_BASE}/rooms/${roomId}/lock`, null, {
-              headers: { Authorization: `Bearer ${token}` },
-            });
-          } else {
-            // Unlock room
-            res = await axios.put(`${API_BASE}/rooms/${roomId}/unlock`, null, {
-              headers: { Authorization: `Bearer ${token}` },
-            });
-          }
-      
-          // Cập nhật state
-          setSelectedRoom(prev => prev ? { ...prev, is_locked: lock } : prev);
-          setMyRooms(prev => prev.map(r => r.id === roomId ? { ...r, is_locked: lock } : r));
-          setPublicRooms(prev => prev.map(r => r.id === roomId ? { ...r, is_locked: lock } : r));
-      
-          toast.success(res.data.message || `Phòng đã ${lock ? 'khóa' : 'mở khóa'}`);
+            setIsLocking(true);
+
+            let res;
+            if (lock) {
+                // Lock room
+                res = await axios.post(`${API_BASE}/rooms/${roomId}/lock`, null, {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+            } else {
+                // Unlock room
+                res = await axios.put(`${API_BASE}/rooms/${roomId}/unlock`, null, {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+            }
+
+            // Cập nhật state
+            setSelectedRoom(prev => prev ? { ...prev, is_locked: lock } : prev);
+            setMyRooms(prev => prev.map(r => r.id === roomId ? { ...r, is_locked: lock } : r));
+            setPublicRooms(prev => prev.map(r => r.id === roomId ? { ...r, is_locked: lock } : r));
+
+            toast.success(res.data.message || `Phòng đã ${lock ? 'khóa' : 'mở khóa'}`);
         } catch (err: any) {
-          if (err.response?.status === 401) toast.error("Bạn phải đăng nhập để thực hiện hành động này");
-          else if (err.response?.status === 403) toast.error("Bạn không có quyền thực hiện hành động này");
-          else if (err.response?.status === 404) toast.error("Phòng không tồn tại");
-          else toast.error(err.response?.data?.error || "Không thể thay đổi trạng thái phòng");
+            if (err.response?.status === 401) toast.error("Bạn phải đăng nhập để thực hiện hành động này");
+            else if (err.response?.status === 403) toast.error("Bạn không có quyền thực hiện hành động này");
+            else if (err.response?.status === 404) toast.error("Phòng không tồn tại");
+            else toast.error(err.response?.data?.error || "Không thể thay đổi trạng thái phòng");
         } finally {
-          setIsLocking(false);
+            setIsLocking(false);
         }
-      };
-      
-      
-      
-          const fetchMembers = async (roomId: number) => {
-              if (!token) return;
-              try {
-                  const res = await getRoomParticipantsAPI(roomId, token);
-                  const mappedMembers: Member[] = (res.data.participants || []).map((p: any) => ({
-                      id: String(p.user_id),          // dùng user_id làm id
-                      name: p.ten_nguoi_dung || "",   // map tên
-                      email: p.email || ""            // nếu API không có email thì để rỗng
-                  }));
-                  setMembers(mappedMembers);
-              } catch (err: any) {
-                  toast.error("Không lấy được danh sách thành viên");
-              }
-          };
-      
-          const checkRoomExists = async (roomId) => {
-              try {
-                  const response = await axios.get(`${API_BASE}/rooms/${roomId}`, {
-                      headers: { Authorization: `Bearer ${token}` },
-                  });
-                  return response.data; // Nếu phòng tồn tại, trả về dữ liệu phòng
-              } catch (error) {
-                  console.error("Phòng không tồn tại:", error.response.data);
-                  return null; // Nếu phòng không tồn tại, trả về null
-              }
-          };
+    };
+
+
+
+    const fetchMembers = async (roomId: number) => {
+        if (!token) return;
+        try {
+            const res = await getRoomParticipantsAPI(roomId, token);
+            const mappedMembers: Member[] = (res.data.participants || []).map((p: any) => ({
+                id: String(p.user_id),          // dùng user_id làm id
+                name: p.ten_nguoi_dung || "",   // map tên
+                email: p.email || ""            // nếu API không có email thì để rỗng
+            }));
+            setMembers(mappedMembers);
+        } catch (err: any) {
+            toast.error("Không lấy được danh sách thành viên");
+        }
+    };
+
+    const checkRoomExists = async (roomId) => {
+        try {
+            const response = await axios.get(`${API_BASE}/rooms/${roomId}`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            return response.data; // Nếu phòng tồn tại, trả về dữ liệu phòng
+        } catch (error) {
+            console.error("Phòng không tồn tại:", error.response.data);
+            return null; // Nếu phòng không tồn tại, trả về null
+        }
+    };
     return (
         <div className="min-h-screen bg-background">
             <Header />
@@ -1605,39 +1605,43 @@ const RoomPage = () => {
                                                     {selectedRoom.is_public ? "Công khai" : "Riêng tư"}
                                                 </Badge>
                                             </div>
-                                            {/* Link khảo sát */}
-                                            {selectedRoom.khao_sat?.public_link && (
+                                            <div className="max-w-full overflow-hidden">
+                                                {/* Link khảo sát */}
+                                                {selectedRoom.khao_sat?.public_link && (
+                                                    <div>
+                                                        <p className="text-sm font-medium text-muted-foreground mb-2">Liên kết khảo sát</p>
+                                                        <div className="flex items-center justify-between rounded-lg border px-3 py-2 bg-muted/50 max-w-full">
+                                                            <code className="text-sm break-words whitespace-pre-wrap max-w-[calc(100%-40px)]">
+                                                                {selectedRoom.khao_sat.public_link}
+                                                            </code>
+                                                            <Button
+                                                                onClick={() => copyInviteCode(selectedRoom.khao_sat!.public_link!)}
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="ml-2 hover:bg-primary/10 flex-shrink-0"
+                                                            >
+                                                                <Copy className="h-4 w-4 text-primary" />
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Link mời */}
                                                 <div>
-                                                    <p className="text-sm font-medium text-muted-foreground mb-2">Liên kết khảo sát</p>
-                                                    <div className="flex items-center justify-between rounded-lg border px-3 py-2 bg-muted/50">
-                                                        <code className="text-sm truncate">{selectedRoom.khao_sat.public_link}</code>
+                                                    <p className="text-sm font-medium text-muted-foreground mb-2">Liên kết mời</p>
+                                                    <div className="flex items-center justify-between rounded-lg border px-3 py-2 bg-muted/50 max-w-full">
+                                                        <code className="text-sm break-words whitespace-pre-wrap max-w-[calc(100%-40px)]">
+                                                            {selectedRoom.share_url}
+                                                        </code>
                                                         <Button
-                                                            onClick={() => copyInviteCode(selectedRoom.khao_sat!.public_link!)}
+                                                            onClick={() => copyInviteCode(selectedRoom.share_url!)}
                                                             variant="ghost"
                                                             size="icon"
-                                                            className="ml-2 hover:bg-primary/10"
+                                                            className="ml-2 hover:bg-primary/10 flex-shrink-0"
                                                         >
                                                             <Copy className="h-4 w-4 text-primary" />
                                                         </Button>
                                                     </div>
-                                                </div>
-                                            )}
-
-
-                                            {/* Link chia sẻ */}
-
-                                            <div>
-                                                <p className="text-sm font-medium text-muted-foreground mb-2">Liên kết mời</p>
-                                                <div className="flex items-center justify-between rounded-lg border px-3 py-2 bg-muted/50">
-                                                    <code className="text-sm truncate">{selectedRoom.share_url}</code>
-                                                    <Button
-                                                        onClick={() => copyInviteCode(selectedRoom.share_url!)}
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="ml-2 hover:bg-primary/10"
-                                                    >
-                                                        <Copy className="h-4 w-4 text-primary" />
-                                                    </Button>
                                                 </div>
                                             </div>
                                             <div className="text-xs text-muted-foreground pt-4 border-t">
@@ -1749,23 +1753,30 @@ const RoomPage = () => {
 
 
                                         <TabsContent value="surveys" className="space-y-2">
-                                            <p className="text-sm font-medium text-muted-foreground mb-2">Khảo sát đã chọn cho phòng</p>
+                                            <p className="text-sm font-medium text-muted-foreground mb-2">
+                                                Khảo sát đã chọn cho phòng
+                                            </p>
                                             {selectedRoom && selectedRoom.khao_sat?.public_link ? (
-                                                <div className="flex items-center justify-between rounded-lg border px-3 py-2 bg-muted/50">
-                                                    <code className="text-sm truncate">{selectedRoom.khao_sat.public_link}</code>
+                                                <div className="flex items-center justify-between rounded-lg border px-3 py-2 bg-muted/50 max-w-full">
+                                                    <code className="text-sm break-words whitespace-pre-wrap max-w-[calc(100%-40px)]">
+                                                        {selectedRoom.khao_sat.public_link}
+                                                    </code>
                                                     <Button
                                                         onClick={() => copyInviteCode(selectedRoom.khao_sat!.public_link!)}
                                                         variant="ghost"
                                                         size="icon"
-                                                        className="ml-2 hover:bg-primary/10"
+                                                        className="ml-2 hover:bg-primary/10 flex-shrink-0"
                                                     >
                                                         <Copy className="h-4 w-4 text-primary" />
                                                     </Button>
                                                 </div>
                                             ) : (
-                                                <span className="text-sm text-muted-foreground">Chưa có khảo sát nào được chọn</span>
+                                                <span className="text-sm text-muted-foreground">
+                                                    Chưa có khảo sát nào được chọn
+                                                </span>
                                             )}
                                         </TabsContent>
+
 
                                     </Tabs>
                                 </>
