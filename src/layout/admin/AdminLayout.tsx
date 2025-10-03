@@ -59,7 +59,7 @@ const Admin = () => {
     const { toast } = useToast();
     const [openSurveyId, setOpenSurveyId] = useState<string | null>(null);
     const [users, setUsers] = useState<User[]>([]);
-    const API_BASE = import.meta.env.VITE_API_URL;
+    const API_BASE = import.meta.env.API_BASE;
 
     useEffect(() => {
         loadSurveys();
