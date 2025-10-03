@@ -37,7 +37,7 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const googleButtonRef = useRef<HTMLDivElement | null>(null);
-  const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8080/api";
+  const API_BASE = import.meta.env.VITE_API_BASE || "https://survey-server-m884.onrender.com/api";
   const handleCredentialResponse = async (response: GoogleCredentialResponse) => {
     console.log("Credential response:", response);
     if (!response.credential) return console.error("❌ Không nhận được ID Token từ Google");
