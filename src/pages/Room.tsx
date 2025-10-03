@@ -925,8 +925,69 @@ const RoomPage = () => {
     }, []);
 
 
-
-
+    const handleLockRoom = async (roomId: number, lock: boolean) => {
+        if (!token) return toast.error("Bạn phải đăng nhập để thực hiện");
+      
+        try {
+          setIsLocking(true);
+      
+          let res;
+          if (lock) {
+            // Lock room
+            res = await axios.post(`${API_BASE}/rooms/${roomId}/lock`, null, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+          } else {
+            // Unlock room
+            res = await axios.put(`${API_BASE}/rooms/${roomId}/unlock`, null, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+          }
+      
+          // Cập nhật state
+          setSelectedRoom(prev => prev ? { ...prev, is_locked: lock } : prev);
+          setMyRooms(prev => prev.map(r => r.id === roomId ? { ...r, is_locked: lock } : r));
+          setPublicRooms(prev => prev.map(r => r.id === roomId ? { ...r, is_locked: lock } : r));
+      
+          toast.success(res.data.message || `Phòng đã ${lock ? 'khóa' : 'mở khóa'}`);
+        } catch (err: any) {
+          if (err.response?.status === 401) toast.error("Bạn phải đăng nhập để thực hiện hành động này");
+          else if (err.response?.status === 403) toast.error("Bạn không có quyền thực hiện hành động này");
+          else if (err.response?.status === 404) toast.error("Phòng không tồn tại");
+          else toast.error(err.response?.data?.error || "Không thể thay đổi trạng thái phòng");
+        } finally {
+          setIsLocking(false);
+        }
+      };
+      
+      
+      
+          const fetchMembers = async (roomId: number) => {
+              if (!token) return;
+              try {
+                  const res = await getRoomParticipantsAPI(roomId, token);
+                  const mappedMembers: Member[] = (res.data.participants || []).map((p: any) => ({
+                      id: String(p.user_id),          // dùng user_id làm id
+                      name: p.ten_nguoi_dung || "",   // map tên
+                      email: p.email || ""            // nếu API không có email thì để rỗng
+                  }));
+                  setMembers(mappedMembers);
+              } catch (err: any) {
+                  toast.error("Không lấy được danh sách thành viên");
+              }
+          };
+      
+          const checkRoomExists = async (roomId) => {
+              try {
+                  const response = await axios.get(`${API_BASE}/rooms/${roomId}`, {
+                      headers: { Authorization: `Bearer ${token}` },
+                  });
+                  return response.data; // Nếu phòng tồn tại, trả về dữ liệu phòng
+              } catch (error) {
+                  console.error("Phòng không tồn tại:", error.response.data);
+                  return null; // Nếu phòng không tồn tại, trả về null
+              }
+          };
     return (
         <div className="min-h-screen bg-background">
             <Header />
