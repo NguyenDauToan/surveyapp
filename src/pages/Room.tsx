@@ -53,10 +53,6 @@ interface Room {
     is_public?: boolean;
     khoa?: boolean;
     mat_khau?: string;
-    members?: Member[]; // 👈 đổi từ string[] sang Member[]
-     is_locked?: boolean;
-}
-
     members?: Member[];
     khao_sat?: KhaoSatSummary;
 
@@ -101,13 +97,13 @@ const RoomPage = () => {
     const [selectedRoom, setSelectedRoom] = useState<RoomWithIsMine | null>(null);
     const [members, setMembers] = useState<Member[]>([]);
     const [showInviteDialog, setShowInviteDialog] = useState(false);
-    const [invites, setInvites] = useState<RoomInvite[]>([]);
-    //    =====
-    const [isLocking, setIsLocking] = useState(false);
     const [membersLoading, setMembersLoading] = useState(false); // 👈 Thêm loading cho members
     const [joinRoomURL, setJoinRoomURL] = useState("");
     const [mySurveys, setMySurveys] = useState<Survey[]>([]);
     const [surveyLink, setSurveyLink] = useState<string | null>(null);
+
+    const [isLocking, setIsLocking] = useState(false);
+
     // Trong component, trước return JSX
     const localSurveyUrl = localStorage.getItem("latest_survey_url") || null;
     useEffect(() => {
@@ -127,23 +123,7 @@ const RoomPage = () => {
             .catch(err => toast.error("Không tải được khảo sát của bạn"));
     }, []);
 
-    const fetchMembers = async (roomId: number) => {
-        if (!token) return;
-        try {
-            const res = await getRoomParticipantsAPI(roomId, token);
-            const mappedMembers: Member[] = (res.data.participants || []).map((p: any) => ({
-                id: String(p.user_id),          // dùng user_id làm id
-                name: p.ten_nguoi_dung || "",   // map tên
-                email: p.email || ""            // nếu API không có email thì để rỗng
-            }));
-            setMembers(mappedMembers);
-        } catch (err: any) {
-            toast.error("Không lấy được danh sách thành viên");
-        }
-    };
-    useEffect(() => { fetchInvites(); }, []);
-
-// ================= KHÓA / MỞ KHÓA PHÒNG =================
+    // ================= KHÓA / MỞ KHÓA PHÒNG =================
 const handleLockRoom = async (roomId: number, lock: boolean) => {
   if (!token) return toast.error("Bạn phải đăng nhập để thực hiện");
 
@@ -181,10 +161,20 @@ const handleLockRoom = async (roomId: number, lock: boolean) => {
 
 
 
-
-
-    // ================= FETCH ROOMS =================
-    const fetchRooms = async () => {
+    const fetchMembers = async (roomId: number) => {
+        if (!token) return;
+        try {
+            const res = await getRoomParticipantsAPI(roomId, token);
+            const mappedMembers: Member[] = (res.data.participants || []).map((p: any) => ({
+                id: String(p.user_id),          // dùng user_id làm id
+                name: p.ten_nguoi_dung || "",   // map tên
+                email: p.email || ""            // nếu API không có email thì để rỗng
+            }));
+            setMembers(mappedMembers);
+        } catch (err: any) {
+            toast.error("Không lấy được danh sách thành viên");
+        }
+    };
 
     const checkRoomExists = async (roomId) => {
         try {
@@ -690,55 +680,6 @@ const handleLockRoom = async (roomId: number, lock: boolean) => {
                                     value={newRoom.mo_ta}
                                     onChange={e => setNewRoom({ ...newRoom, mo_ta: e.target.value })}
                                 />
-
-                                {/* Dropdown chọn khảo sát */}
-                                <div className="mb-4">
-                                    <label className="text-sm font-medium mb-1 block">Chọn khảo sát</label>
-                                    <select
-                                        value={newRoom.khao_sat_id ?? ""}
-                                        onChange={e =>
-                                            setNewRoom({ ...newRoom, khao_sat_id: Number(e.target.value) })
-                                        }
-                                        className="w-full border rounded px-3 py-2"
-                                    >
-                                        <option value="">-- Chọn khảo sát --</option>
-                                        {mySurveys.map(s => (
-                                            <option key={s.id} value={s.id}>
-                                                {s.tieu_de || `Khảo sát #${s.id}`}
-                                            </option>
-                                        ))}
-                                    </select>
-
-                                    {/* Hiển thị URL khảo sát khi đã chọn */}
-                                    {newRoom.khao_sat_id !== null && (() => {
-                                        const selectedSurvey = mySurveys.find(s => s.id === newRoom.khao_sat_id);
-                                        <p>{selectedSurvey.tieu_de || "Khảo sát chưa đặt tiêu đề"}</p>
-
-
-                                        return (
-                                            <div className="mt-2 space-y-1">
-                                                <p className="text-sm font-medium">
-                                                    {selectedSurvey.tieu_de} {/* Tên khảo sát thực */}
-                                                </p>
-                                                {selectedSurvey.public_link ? (
-                                                    <div className="flex items-center justify-between rounded-lg border px-3 py-2 bg-muted/50">
-                                                        <code className="text-sm truncate">{selectedSurvey.public_link}</code>
-                                                        <Button
-                                                            onClick={() => copyInviteCode(selectedSurvey.public_link!)}
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            className="ml-2 hover:bg-primary/10"
-                                                        >
-                                                            <Copy className="h-4 w-4 text-primary" />
-                                                        </Button>
-                                                    </div>
-                                                ) : (
-                                                    <p className="text-sm text-muted-foreground">Khảo sát này chưa có URL</p>
-                                                )}
-                                            </div>
-                                        );
-                                    })()}
-                                </div>
                                 <div className="flex items-center gap-4">
                                     <label>
                                         <input
@@ -757,7 +698,6 @@ const handleLockRoom = async (roomId: number, lock: boolean) => {
                                         Khoá (có mật khẩu)
                                     </label>
                                 </div>
-
                                 {newRoom.khoa && (
                                     <Input
                                         type="password"
@@ -766,20 +706,8 @@ const handleLockRoom = async (roomId: number, lock: boolean) => {
                                         onChange={e => setNewRoom({ ...newRoom, mat_khau: e.target.value })}
                                     />
                                 )}
-
                                 <div className="flex gap-2">
-                                    <Button
-                                        onClick={async () => {
-                                            if (!token) return toast.error("Bạn phải đăng nhập mới tạo được phòng");
-                                            if (!newRoom.ten_room.trim()) return toast.error("Tên phòng không được để trống");
-                                            if (!newRoom.khao_sat_id && !localSurveyUrl)
-                                                return toast.error("Phải chọn hoặc tạo khảo sát trước khi tạo phòng");
-
-                                            await handleCreateRoom();
-                                        }}
-                                    >
-                                        Tạo phòng
-                                    </Button>
+                                    <Button onClick={handleCreateRoom}>Tạo phòng</Button>
                                     <Button variant="outline" onClick={() => setShowCreateForm(false)}>Hủy</Button>
                                 </div>
                             </CardContent>
@@ -1213,78 +1141,6 @@ const handleLockRoom = async (roomId: number, lock: boolean) => {
                                             </div>
                                         </TabsContent>
                                         {/* SECURITY TAB */}
-<TabsContent value="security" className="space-y-4">
-  {/* Lock/Unlock (owner-only) */}
-  {selectedRoom?.isMine && (
-    <div className="flex items-center gap-2">
-      <input
-        type="checkbox"
-        checked={selectedRoom.is_locked ?? false}
-        onChange={async (e) => {
-          if (!selectedRoom) return;
-          try {
-            // Lock/unlock room API
-            await handleLockRoom(selectedRoom.id, e.target.checked);
-          } catch {
-            toast.error("Không thể thay đổi trạng thái khóa phòng");
-          }
-        }}
-      />
-      <span className="text-sm">Khóa phòng (chỉ owner mới vào)</span>
-    </div>
-  )}
-
-  {/* Password lock (owner-only) */}
-  {selectedRoom?.isMine && (
-    <div className="flex items-center gap-2 mt-2">
-      <input
-        type="checkbox"
-        checked={selectedRoom.khoa ?? false} // trạng thái password lock
-        onChange={async (e) => {
-          if (!selectedRoom) return;
-
-          if (e.target.checked) {
-            const newPass = prompt("Nhập mật khẩu mới:");
-            if (!newPass) return;
-
-            try {
-              await setRoomPasswordAPI(selectedRoom.id, token!, newPass);
-              toast.success("Đã đặt mật khẩu");
-              fetchRooms(); // cập nhật danh sách phòng
-            } catch {
-              toast.error("Không thể đặt mật khẩu");
-            }
-          } else {
-            try {
-              await removeRoomPasswordAPI(selectedRoom.id, token!);
-              toast.success("Đã gỡ mật khẩu");
-              fetchRooms(); // cập nhật danh sách phòng
-            } catch {
-              toast.error("Không thể gỡ mật khẩu");
-            }
-          }
-        }}
-      />
-      <span className="text-sm">Khóa phòng bằng mật khẩu</span>
-    </div>
-  )}
-
-  {/* Thông báo cho người không phải owner */}
-  {!selectedRoom?.isMine && (
-    <div className="text-sm text-muted-foreground">
-      {selectedRoom?.is_locked
-        ? "Phòng đang bị khóa, chỉ owner mới có thể vào"
-        : selectedRoom?.khoa
-        ? "Phòng có mật khẩu, bạn cần nhập mật khẩu để tham gia"
-        : "Bạn không có quyền chỉnh sửa bảo mật phòng"}
-    </div>
-  )}
-</TabsContent>
-
-
-
-
-
                                         <TabsContent value="security" className="space-y-4">
                                             <div className="flex items-center gap-2">
                                                 <input

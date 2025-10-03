@@ -1,159 +1,394 @@
-// import { useEffect, useState } from "react";
-// import { useParams } from "react-router-dom";
-// import axios from "axios";
-// import { toast } from "sonner";
-// import SurveyCreate from "./SurveyCreate";
-
-// interface SurveyData {
-//   id: number;
-//   title: string;
-//   description: string;
-//   questions: any[];
-//   settings?: {
-//     collect_email: boolean;
-//   };
-//   end_date?: string;
-// }
-
-// export default function SurveyEditPage() {
-//   const { id } = useParams<{ id: string }>();
-//   const token = localStorage.getItem("token"); // hoặc lấy từ redux
-//   const [surveyData, setSurveyData] = useState<SurveyData | null>(null);
-//   const [loading, setLoading] = useState(false);
-
-//   useEffect(() => {
-//     if (!id || !token) return;
-
-//     const fetchSurvey = async () => {
-//       setLoading(true);
-//       try {
-//         const res = await axios.get(`https://survey-server-m884.onrender.com/api/forms/${id}`, {
-//           headers: { Authorization: `Bearer ${token}` },
-//         });
-//         setSurveyData(res.data);
-//       } catch (err: any) {
-//         console.error(err);
-//         toast.error("Không tải được khảo sát");
-//       } finally {
-//         setLoading(false);
-//       }
-//     };
-//     fetchSurvey();
-//   }, [id, token]);
-
-//   if (!id || !token) return <p>Không tìm thấy khảo sát hoặc chưa đăng nhập</p>;
-//   if (loading) return <p>Đang tải khảo sát...</p>;
-//   if (!surveyData) return <p>Không tìm thấy dữ liệu khảo sát</p>;
-
-//   return <SurveyCreate existingSurvey={surveyData} />;
-// }
-
-// src/pages/SurveyEditPage.tsx
-
-
 // src/pages/SurveyEditPage.tsx
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
-import axios from "axios";
+import { useNavigate, useParams, useLocation  } from "react-router-dom";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
+import axios from "axios";
+import Header from "@/components/Header";
+import { Plus, Trash2, Save } from "lucide-react";
 
 interface Question {
-  id: number;
-  content: string;
-  props?: any;
+  id: string;
+  type: "text" | "multiple-choice" | "rating" | "yes-no" | "file-upload";
+  title: string;
+  required: boolean;
+  options?: string[];
 }
 
-interface SurveyData {
-  id: number;
+interface Survey {
   title: string;
   description: string;
   questions: Question[];
-  settings?: {
-    collect_email: boolean;
-  };
-  end_date?: string;
 }
 
-export default function SurveyEditPage() {
+interface QuestionProps {
+  required?: boolean;
+  options?: string[];
+}
+
+const SurveyEditPage = () => {
   const { id } = useParams<{ id: string }>();
-  const [surveyData, setSurveyData] = useState<SurveyData | null>(null);
+  const navigate = useNavigate();
+    const location = useLocation();
+  const stateSurvey = location.state?.survey; // nhận dữ liệu từ Dialog
+ const [survey, setSurvey] = useState<Survey>({
+    title: "",
+    description: "",
+    questions: [],
+  });
+
+  const [newQuestion, setNewQuestion] = useState<Partial<Question>>({
+    type: "text",
+    title: "",
+    required: false,
+    options: [],
+  });
   const [loading, setLoading] = useState(false);
+  const [surveyLink, setSurveyLink] = useState<string | null>(null);
 
-  const token = localStorage.getItem("token");
+  const token = localStorage.getItem("token") || undefined;
 
-  // --- Gọi API GET form ---
-  useEffect(() => {
-    if (!id || !token) return;
-    setLoading(true);
+  const questionTypes = [
+    { value: "text", label: "Câu hỏi mở" },
+    { value: "multiple-choice", label: "Trắc nghiệm" },
+    { value: "rating", label: "Đánh giá sao" },
+    { value: "yes-no", label: "Có/Không" },
+    { value: "file-upload", label: "Tải ảnh lên" },
+  ];
 
-    axios
-      .get(`https://survey-server-m884.onrender.com/api/forms/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      .then((res) => setSurveyData(res.data))
-      .catch(() => toast.error("Không tải được khảo sát"))
-      .finally(() => setLoading(false));
-  }, [id, token]);
+  // ================== Load survey hiện có ==================
+useEffect(() => {
+  if (stateSurvey) {
+    setSurvey({
+      title: stateSurvey.title || "",
+      description: stateSurvey.description || "",
+      questions: (stateSurvey.questions || []).map((q: any) => ({
+        id: q.id.toString(),
+        title: q.content || q.title || "",
+        type: q.type || "text",
+        required: q.required || false,
+        options: q.options?.map((o: any) => o.noi_dung || o) || [],
+      })),
+    });
+    setSurveyLink(stateSurvey.public_link || null);
 
-  // --- Hàm gọi API PUT question ---
-  const updateQuestionAPI = async (
-    questionId: number,
-    content: string,
-    props?: object
-  ) => {
-    if (!token) throw new Error("Bạn chưa đăng nhập");
+    console.log("Initial survey from state:", stateSurvey);
+    console.log("Mapped survey:", {
+      title: stateSurvey.title,
+      description: stateSurvey.description,
+      questions: (stateSurvey.questions || []).map((q: any) => ({
+        id: q.id.toString(),
+        title: q.content || q.title || "",
+        type: q.type || "text",
+        required: q.required || false,
+        options: q.options?.map((o: any) => o.noi_dung || o) || [],
+      })),
+    });
 
-    const body: any = { content };
-    if (props) body.props = props;
+    return; // không load API
+  }
 
-    const res = await axios.put(
-      `https://survey-server-m884.onrender.com/api/questions/${questionId}`,
-      body,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    return res.data; // { message: "updated" }
-  };
+  if (!id || !token) return;
 
-  // --- Handle cập nhật question ---
-  const handleUpdateQuestion = async (questionId: number, newContent: string) => {
-    try {
-      // Ví dụ props mặc định là required=true, bạn có thể thay đổi theo UI
-      await updateQuestionAPI(questionId, newContent, { required: true });
-      toast.success("Cập nhật câu hỏi thành công");
+  setLoading(true);
+  axios.get(`https://survey-server-m884.onrender.com/api/forms/${id}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+    .then(res => {
+      const data = res.data;
 
-      // Cập nhật local state luôn
-      setSurveyData((prev) => {
-        if (!prev) return prev;
+      const questions: Question[] = (data.cau_hois || []).map((q: any) => {
+        let props: QuestionProps = {};
+        try { props = q.props_json ? JSON.parse(q.props_json) : {}; } 
+        catch { props = {}; }
+
         return {
-          ...prev,
-          questions: prev.questions.map((q) =>
-            q.id === questionId ? { ...q, content: newContent } : q
-          ),
+          id: q.id.toString(),
+          title: q.noi_dung || "",
+          type: q.loai_cau_hoi === "MULTIPLE_CHOICE" ? "multiple-choice" :
+                q.loai_cau_hoi === "FILL_BLANK" ? "text" :
+                q.loai_cau_hoi === "RATING" ? "rating" :
+                q.loai_cau_hoi === "TRUE_FALSE" ? "yes-no" :
+                q.loai_cau_hoi === "FILE_UPLOAD" ? "file-upload" : "text",
+          required: props.required || false,
+          options: props.options || [],
         };
       });
-    } catch (err: any) {
-      console.error(err);
-      toast.error("Cập nhật câu hỏi thất bại");
+
+      const mappedSurvey = {
+        title: data.tieu_de || "",
+        description: data.mo_ta || "",
+        questions,
+      };
+
+      setSurvey(mappedSurvey);
+      setSurveyLink(data.public_link || null);
+
+      console.log("Initial survey from API:", data);
+      console.log("Mapped survey:", mappedSurvey);
+    })
+    .catch(err => {
+      console.error(err.response?.data || err.message);
+      toast.error("Không thể tải khảo sát");
+    })
+    .finally(() => setLoading(false));
+}, [id, token, stateSurvey]);
+
+
+  // ================== Map type FE -> BE ==================
+  const mapType = (type: string) => {
+    switch (type) {
+      case "text": return "FILL_BLANK";
+      case "multiple-choice": return "MULTIPLE_CHOICE";
+      case "rating": return "RATING";
+      case "yes-no": return "TRUE_FALSE";
+      case "file-upload": return "FILE_UPLOAD";
+      default: return "FILL_BLANK";
     }
   };
 
-  if (!id || !token) return <p>Không tìm thấy khảo sát hoặc chưa đăng nhập</p>;
-  if (loading) return <p>Đang tải khảo sát...</p>;
-  if (!surveyData) return <p>Không tìm thấy dữ liệu khảo sát</p>;
+  // ================== Add/Remove question ==================
+  const addQuestion = () => {
+    if (!newQuestion.title) return toast.error("Nhập nội dung câu hỏi");
+    const question: Question = {
+      id: Date.now().toString(),
+      type: newQuestion.type as Question["type"],
+      title: newQuestion.title,
+      required: newQuestion.required || false,
+      options: newQuestion.type === "multiple-choice" ? newQuestion.options || [] : undefined,
+    };
+    setSurvey(prev => ({ ...prev, questions: [...prev.questions, question] }));
+    setNewQuestion({ type: "text", title: "", required: false, options: [] });
+    toast.success("Thêm câu hỏi thành công!");
+  };
+
+  const removeQuestion = (id: string) => {
+    setSurvey(prev => ({ ...prev, questions: prev.questions.filter(q => q.id !== id) }));
+    toast.success("Đã xóa câu hỏi!");
+  };
+  // ================== Save survey ==================
+const saveSurvey = async () => {
+  if (!survey.title) return toast.error("Nhập tiêu đề khảo sát");
+  if (survey.questions.length === 0) return toast.error("Chưa có câu hỏi nào");
+
+  try {
+    // --- Xác định câu hỏi cũ và mới ---
+    const oldQuestionIds = (stateSurvey?.questions || []).map((q: any) => Number(q.id));
+    const updatedQuestions = survey.questions.map((q, index) => {
+      const isOld = oldQuestionIds.includes(Number(q.id));
+      return {
+        id: isOld ? Number(q.id) : undefined, // chỉ question cũ có id
+        content: q.title,
+        loai_cau_hoi: mapType(q.type),
+        thu_tu: index,
+        props: { required: q.required, ...(q.options ? { options: q.options } : {}) }
+      };
+    });
+
+    // --- Tìm các question đã bị xóa ---
+    const deletedQuestions = (stateSurvey?.questions || [])
+      .filter(q => !survey.questions.some(sq => Number(sq.id) === Number(q.id)))
+      .map(q => ({ id: Number(q.id), delete: true }));
+
+    // --- Payload gửi BE ---
+    const payload = {
+      title: survey.title,
+      description: survey.description,
+      settings: { shuffleQuestions: true, theme: "light" },
+      end_date: stateSurvey?.end_date || new Date().toISOString(),
+      questions: [...updatedQuestions, ...deletedQuestions]
+    };
+
+    console.log("Payload sent:", JSON.stringify(payload, null, 2));
+
+    const res = await axios.put(
+      `https://survey-server-m884.onrender.com/api/forms/${id}/updateform`,
+      payload,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    if (res.status === 200) {
+      toast.success("Cập nhật khảo sát thành công!");
+      if (res.data.public_link) setSurveyLink(res.data.public_link);
+    } else {
+      toast.error(res.data.message || "Lỗi khi lưu khảo sát");
+    }
+
+  } catch (err: any) {
+    console.error(err.response?.data || err.message);
+    toast.error(err.response?.data?.message || err.message || "Lỗi khi lưu khảo sát");
+  }
+};
+
 
   return (
-    <div className="p-4">
-      <h1 className="text-2xl font-bold mb-4">{surveyData.title}</h1>
-      {surveyData.questions.map((q) => (
-        <div key={q.id} className="mb-4">
+    <div className="min-h-screen bg-background">
+      <Header />
+      <main className="container max-w-4xl mx-auto py-8 px-4">
+        <h1 className="text-3xl font-bold mb-4">Chỉnh sửa khảo sát</h1>
+
+        <Card className="mb-6">
+          <CardHeader><CardTitle>Thông tin cơ bản</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label>Tiêu đề khảo sát</Label>
+              <Input value={survey.title} onChange={e => setSurvey({...survey, title: e.target.value})} />
+            </div>
+            <div>
+              <Label>Mô tả</Label>
+              <Textarea value={survey.description} onChange={e => setSurvey({...survey, description: e.target.value})} />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Add Question */}
+        <Card className="mb-6">
+          <CardHeader><CardTitle>Thêm câu hỏi mới</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label>Loại câu hỏi</Label>
+              <select
+                value={newQuestion.type}
+                onChange={e => setNewQuestion(prev => ({ ...prev, type: e.target.value as Question['type'], options: e.target.value === 'multiple-choice' ? [''] : [] }))}
+                className="border rounded px-2 py-1 w-full"
+              >
+                {questionTypes.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <Label>Nội dung câu hỏi</Label>
+              <Input value={newQuestion.title} onChange={e => setNewQuestion({...newQuestion, title: e.target.value})} />
+            </div>
+
+            {newQuestion.type === "multiple-choice" && (
+              <div>
+                <Label>Các lựa chọn</Label>
+                {newQuestion.options?.map((opt, idx) => (
+                  <div key={idx} className="flex gap-2 mb-1">
+                    <Input value={opt} onChange={e => {
+                      const opts = [...(newQuestion.options || [])];
+                      opts[idx] = e.target.value;
+                      setNewQuestion(prev => ({ ...prev, options: opts }));
+                    }} />
+                    <Button variant="ghost" onClick={() => {
+                      const opts = (newQuestion.options || []).filter((_, i) => i !== idx);
+                      setNewQuestion(prev => ({ ...prev, options: opts }));
+                    }}><Trash2 className="h-4 w-4"/></Button>
+                  </div>
+                ))}
+                <Button onClick={() => setNewQuestion(prev => ({ ...prev, options: [...(prev.options || []), ""] }))}>Thêm lựa chọn</Button>
+              </div>
+            )}
+
+            <div className="flex items-center gap-2">
+              <input type="checkbox" checked={newQuestion.required} onChange={e => setNewQuestion(prev => ({ ...prev, required: e.target.checked }))}/>
+              <Label>Bắt buộc</Label>
+            </div>
+
+
+            <Button onClick={addQuestion} className="w-full"><Plus className="h-4 w-4 mr-2"/>Thêm câu hỏi</Button>
+          </CardContent>
+        </Card>
+
+        {/* Questions list */}
+     {survey.questions.map((q, idx) => (
+  <div key={q.id} className="border p-4 rounded mb-2 flex flex-col gap-2">
+    <div className="flex justify-between items-center">
+      <span className="font-medium">{idx + 1}.</span>
+      <Button variant="ghost" onClick={() => removeQuestion(q.id)}>
+        <Trash2 className="h-4 w-4"/>
+      </Button>
+    </div>
+
+    {/* Input để sửa tiêu đề */}
+    <input
+      type="text"
+      value={q.title}
+      onChange={e => {
+        const newTitle = e.target.value;
+        setSurvey(prev => ({
+          ...prev,
+          questions: prev.questions.map(qq =>
+            qq.id === q.id ? { ...qq, title: newTitle } : qq
+          )
+        }));
+      }}
+      className="border p-1 rounded w-full"
+    />
+
+    {/* Nếu là multiple-choice thì show options */}
+    {q.type === "multiple-choice" && (
+      <div className="flex flex-col gap-1 ml-4">
+        {q.options?.map((o, i) => (
           <input
+            key={i}
             type="text"
-            value={q.content || ""} // tránh warning null
-            onChange={(e) => handleUpdateQuestion(q.id, e.target.value)}
-            className="border p-2 rounded w-full"
+            value={o}
+            onChange={e => {
+              const newOptions = [...(q.options || [])];
+              newOptions[i] = e.target.value;
+              setSurvey(prev => ({
+                ...prev,
+                questions: prev.questions.map(qq =>
+                  qq.id === q.id ? { ...qq, options: newOptions } : qq
+                )
+              }));
+            }}
+            className="border p-1 rounded w-full"
           />
+        ))}
+        <Button
+          size="sm"
+          onClick={() => {
+            setSurvey(prev => ({
+              ...prev,
+              questions: prev.questions.map(qq =>
+                qq.id === q.id
+                  ? { ...qq, options: [...(qq.options || []), ""] }
+                  : qq
+              )
+            }));
+          }}
+        >
+          Thêm option
+        </Button>
+      </div>
+    )}
+
+    {/* Checkbox required */}
+    <label className="flex items-center gap-2 mt-1">
+      <input
+        type="checkbox"
+        checked={q.required}
+        onChange={e => {
+          const required = e.target.checked;
+          setSurvey(prev => ({
+            ...prev,
+            questions: prev.questions.map(qq =>
+              qq.id === q.id ? { ...qq, required } : qq
+            )
+          }));
+        }}
+      />
+      Bắt buộc
+    </label>
+  </div>
+))}
+
+
+        {/* Action */}
+        <div className="flex gap-4 justify-end">
+          {surveyLink && <a href={surveyLink} target="_blank" className="text-blue-500 underline">Xem khảo sát</a>}
+          <Button onClick={saveSurvey}><Save className="h-4 w-4 mr-2"/>Lưu khảo sát</Button>
         </div>
-      ))}
+      </main>
     </div>
   );
-}
+};
+
+export default SurveyEditPage;

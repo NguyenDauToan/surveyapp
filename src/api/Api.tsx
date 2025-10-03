@@ -3,7 +3,7 @@ import axios, { AxiosInstance } from "axios";
 import { GoogleLogin, CredentialResponse } from "@react-oauth/google";
 // =================== CONFIG ===================
 // Vite expose biến môi trường qua import.meta.env
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8080/api";
+const API_BASE = "https://survey-server-m884.onrender.com/api";
 
 const axiosClient: AxiosInstance = axios.create({
   baseURL: API_BASE,
