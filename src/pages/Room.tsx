@@ -119,6 +119,9 @@ const RoomPage = () => {
     const [currentOpenedRoomId, setCurrentOpenedRoomId] = useState<string | null>(null);
     // Trong component, trước return JSX
     const localSurveyUrl = localStorage.getItem("latest_survey_url") || null;
+    const [surveyLink, setSurveyLink] = useState<string | null>(null);
+    const [isLocking, setIsLocking] = useState(false);
+    
     useEffect(() => {
         if (!token) return;
         getMyFormsAPI(token)
