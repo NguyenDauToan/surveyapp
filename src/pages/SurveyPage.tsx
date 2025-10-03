@@ -442,14 +442,6 @@ const handleSubmit = async (e: FormEvent) => {
 
         {errorMsg && <div className="text-red-600 mt-4 text-center text-sm">{errorMsg}</div>}
 
-  <LoginDialog
-    open={loginOpen}
-    onOpenChange={(open) => {
-      setLoginOpen(open);
-      if (!open) fetchSurveyAfterLogin();
-    }}
-    redirectTo={window.location.pathname + window.location.search} 
-  />
       </div>
        
 
