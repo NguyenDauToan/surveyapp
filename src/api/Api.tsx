@@ -1,9 +1,9 @@
 // src/api/api.tsx
 import axios, { AxiosInstance } from "axios";
 import { GoogleLogin, CredentialResponse } from "@react-oauth/google";
-
 // =================== CONFIG ===================
-const API_BASE = "https://survey-server-m884.onrender.com/api";
+// Vite expose biến môi trường qua import.meta.env
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8080/api";
 
 const axiosClient: AxiosInstance = axios.create({
   baseURL: API_BASE,
@@ -53,7 +53,50 @@ export interface Question {
   type: string;
   answers: string[];
 }
+interface Survey {
+  id: number;
+  tieu_de: string;
+  mo_ta?: string;
+  public_link?: string | null;
+}
+interface EnterRoomResponse {
+  status: string;
+  room: {
+    id: number;
+    ten_room: string;
+    mo_ta: string;
+    share_url: string;
+    is_public: boolean;
+    ngay_tao: string;
+    member_count: number;
+    members: {
+      id: number;
+      user_id: number;
+      ten_nguoi_dung: string;
+      status: string;
+    }[];
+  };
+}
+export const enterRoomByShareURL = async (
+  shareURL: string,
+  password?: string
+): Promise<EnterRoomResponse> => {
+  const token = localStorage.getItem("token"); // 👈 lấy token sau khi login
+  const body = password ? { password } : {};
 
+  const res = await axios.post<EnterRoomResponse>(
+    `${API_BASE}/rooms/share/${shareURL}/enter`,
+    body,
+    {
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    }
+  );
+
+  return res.data;
+};
 // =================== SURVEY & QUESTION ===================
 export const createSurveyAPI = async (token: string, payload: any) => {
   console.log("📌 [API] createSurvey payload:", payload);
@@ -215,30 +258,30 @@ export const enterRoomAPI = async (roomId: number, password?: string, token?: st
   console.log("[enterRoomAPI] roomId:", roomId, "payload:", payload, "token:", token);
 
   const res = await fetch(`${API_BASE}/rooms/${roomId}/enter`, {
-      method: "POST",
-      headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify(payload),
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(payload),
   });
 
   console.log("[enterRoomAPI] raw response:", res);
 
   if (!res.ok) {
-      const data = await res.json();
-      console.error("[enterRoomAPI] error response:", data);
-      throw new Error(data.error || data.message || "Không thể tham gia phòng");
+    const data = await res.json();
+    console.error("[enterRoomAPI] error response:", data);
+    throw new Error(data.error || data.message || "Không thể tham gia phòng");
   }
 
   const data = await res.json();
   console.log("[enterRoomAPI] success response:", data);
-  return data;
+  return data; // Đảm bảo rằng data có chứa room và members
 };
 // api/Api.ts
 export const getRoomParticipantsAPI = async (roomId: number, token: string) => {
   const res = await axios.get(`${API_BASE}/rooms/${roomId}/participants`, {
-      headers: { Authorization: `Bearer ${token}` }
+    headers: { Authorization: `Bearer ${token}` }
   });
   return res.data.participants; // [{id, name, email, ...}, ...]
 };
@@ -253,19 +296,48 @@ export const getFormDetail = async (id: number, token: string) => {
 };
 
 
-export const updateForm = async (id: number, body: any, token: string) => {
-  const res = await axiosClient.put(`/forms/${id}`, body, {
-    headers: { Authorization: `Bearer ${token}` },
+export const updateForm = async (id: number, data: { title: string; description: string }, token?: string) => {
+  const res = await fetch(`${API_BASE}/forms/${id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(data),
   });
-  return res.data;
+
+  if (!res.ok) {
+    const errorData = await res.json();
+    throw new Error(errorData.message || "Không thể cập nhật khảo sát");
+  }
+  return await res.json();
 };
 // =================== SURVEY ===================
 export const getMySurveys = async (token: string) => {
-  const res = await axiosClient.get("/forms/my", {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  return res.data; // backend trả về mảng survey của user
+  try {
+    const res = await axiosClient.get("/forms/my", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    const surveysFromDB: Survey[] = res.data || [];
+
+    // Nếu localStorage có URL, thêm vào mảng, nếu không thì bỏ qua
+    const localUrl = localStorage.getItem("latest_survey_url");
+    if (localUrl) {
+      surveysFromDB.push({
+        id: -1, // id giả để không trùng với DB
+        tieu_de: "Khảo sát local",
+        public_link: localUrl,
+      });
+    }
+
+    return surveysFromDB;
+  } catch (err) {
+    console.error("Lỗi lấy khảo sát:", err);
+    return [];
+  }
 };
+
 
 export const deleteForm = async (id: number, token: string) => {
   const res = await axiosClient.delete(`/forms/${id}`, {
@@ -275,18 +347,32 @@ export const deleteForm = async (id: number, token: string) => {
 };
 // =================== ROOM DETAIL ===================
 export const getRoomDetailAPI = async (roomId: number, token: string) => {
+  console.log("Fetching room detail for roomId:", roomId);
+
   const res = await fetch(`${API_BASE}/rooms/${roomId}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
 
-  const data = await res.json().catch(() => null);
+  console.log("Response status:", res.status, "ok:", res.ok);
+
+  let data: any = null;
+  try {
+    data = await res.json();
+    console.log("Response data:", data);
+  } catch (err) {
+    console.error("Failed to parse JSON:", err);
+  }
 
   if (!res.ok) {
     throw new Error(data?.message || res.statusText || "Không thể lấy chi tiết phòng");
   }
 
-  return data; // { id, ten_room, mo_ta, khao_sat, share_url, locked, members, ... }
+  // Log khao_sat riêng
+  console.log("KhaoSat in data:", data?.data?.khao_sat);
+
+  return data; // { data: { id, ten_room, mo_ta, khao_sat, share_url, members, ... } }
 };
+
 
 // =================== ROOM UPDATE ===================
 export const updateRoomAPI = async (
@@ -356,52 +442,76 @@ export const restoreRoomAPI = async (roomId: number, token: string) => {
   );
   return res.data;
 };
-export const getMyFormsAPI = async (token: string) => {
-  const res = await axios.get(`${API_BASE}/forms/my`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  return res.data.forms;
+export const getMyFormsAPI = async (token: string): Promise<Survey[]> => {
+  try {
+    // Lấy khảo sát từ database
+    const res = await axios.get(`${API_BASE}/forms/my`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    const surveysFromDB: Survey[] = res.data.forms || [];
+
+    // Kiểm tra khảo sát local
+    const localUrl = localStorage.getItem("latest_survey_url");
+    if (localUrl) {
+      surveysFromDB.push({
+        id: -1,            // id âm để phân biệt khảo sát local
+        tieu_de: "Khảo sát local",
+        public_link: localUrl,
+      });
+    }
+
+    return surveysFromDB;
+  } catch (err) {
+    console.error("Lỗi lấy khảo sát:", err);
+    return [];
+  }
 };
-export const getUserByEmailOrUsername = async (input: string, token: string) => {
-  return axios.get(`${API_BASE}/users/find?query=${input}`, {
+// FE
+export const getUserByEmailOrUsername = async (email: string, token: string) => {
+  return axios.get(`${API_BASE}/users`, {
     headers: { Authorization: `Bearer ${token}` },
+    params: { email }, // thay vì query
+  });
+};
+export const getUserByIdAPI = async (userId: number, token: string) => {
+  return axios.get(`${API_BASE}/users`, {  // 👈 Assume backend hỗ trợ search by id param
+    headers: { Authorization: `Bearer ${token}` },
+    params: { id: userId },  // Hoặc /users/${userId} nếu có endpoint riêng
   });
 };
 // =================== ROOM MEMBER ===================
+// Invite member
 export const inviteMemberAPI = (roomId: number, token: string, userId: number) => {
   return axios.post(
-      `${API_BASE}/rooms/${roomId}/add-member`,
-      { nguoi_dung_id: userId },   // backend dùng `nguoi_dung_id`
-      { headers: { Authorization: `Bearer ${token}` } }
+    `${API_BASE}/room-invites/${roomId}/invite`,
+    { nguoi_dung_id: userId },
+    { headers: { Authorization: `Bearer ${token}` } }
   );
 };
 
+export const getRoomInvitesAPI = async (roomId: number, token: string) => {
+  const res = await axios.get(`${API_BASE}/room-invites/${roomId}/invites`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return res.data.invites;
+};
 // Api.tsx
 export const fetchRoomParticipants = async (roomId: number, token: string) => {
-  try {
-    const res = await axios.get(`${API_BASE}/rooms/${roomId}/participants`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    return res.data.participants; // mảng participants
-  } catch (err: any) {
-    console.error("Lỗi fetch participants:", err);
-    throw err;
-  }
+  const res = await axios.get(`${API_BASE}/rooms/${roomId}/participants`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return res.data.participants;
 };
-
 
 
 export const removeMemberAPI = async (roomId: number, token: string, member: string) => {
-  const res = await axios.delete(
-      `${API_BASE}/rooms/${roomId}/members`,
-      {
-          headers: { Authorization: `Bearer ${token}` },
-          data: { member }, // axios DELETE có thể gửi body qua data
-      }
-  );
+  const res = await axios.delete(`${API_BASE}/rooms/${roomId}/members`, {
+    headers: { Authorization: `Bearer ${token}` },
+    data: { member },
+  });
   return res.data;
 };
-
 
 
 // Tạo link chia sẻ form

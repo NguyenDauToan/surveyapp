@@ -16,7 +16,7 @@ const Index = () => {
       <Hero isLoggedIn={!!user} />
       </main>
       <Footer />
-    </div>
+    </div>  
   );
 };
 
