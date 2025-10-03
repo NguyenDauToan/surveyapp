@@ -62,24 +62,33 @@ export default function DashboardTab({ formId, token }: DashboardProps) {
       {data.map((q) => {
         // MULTIPLE_CHOICE / TRUE_FALSE → PieChart
         let chartData: any[] = [];
-        if (["MULTIPLE_CHOICE", "TRUE_FALSE"].includes(q.type) && q.stats) {
-          const total = q.stats.reduce(
-            (sum: number, s: any) => sum + s.count,
-            0
-          );
-          chartData = q.stats.map((s: any) => {
-            let option = s.option;
-            if (Array.isArray(option)) {
-              option = option.flat(Infinity).join(", ");
-            }
-            const percent = total > 0 ? (s.count / total) * 100 : 0;
-            return {
-              ...s,
-              optionText: option,
-              percent,
-            };
-          });
-        }
+       if (["MULTIPLE_CHOICE", "TRUE_FALSE"].includes(q.type) && q.stats) {
+  const total = q.stats.reduce(
+    (sum: number, s: any) => sum + Number(s.count || 0),
+    0
+  );
+
+  chartData = q.stats.map((s: any) => {
+    // TRUE_FALSE: map boolean sang string
+   const option =
+  s.option === true || s.option === "true"
+    ? "Đúng"
+    : s.option === false || s.option === "false"
+    ? "Sai"
+    : Array.isArray(s.option)
+    ? s.option.flat(Infinity).join(", ")
+    : String(s.option);
+
+    const percent = total > 0 ? (Number(s.count) / total) * 100 : 0;
+
+    return {
+      ...s,
+      optionText: option,
+      percent,
+    };
+  });
+}
+
 
         return (
           <div

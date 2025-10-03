@@ -107,13 +107,13 @@ export default function SurveyPage() {
 const handleChange = (
   cauHoiId: number,
   value: string | File | null,
-  type?: "multiple_choice" | "file_upload" | "text"
+  type?: "multiple_choice" | "file_upload" | "text" | "true_false"
 ) => {
   setAnswers((prev) =>
     prev.map((a) => {
       if (a.cau_hoi_id !== cauHoiId) return a;
 
-      if (type === "multiple_choice") {
+      if (type === "multiple_choice" || type === "true_false") {
         return { ...a, noi_dung: "", lua_chon: JSON.stringify([value]) };
       }
       if (type === "file_upload") {
@@ -263,7 +263,7 @@ const handleSubmit = async (e: FormEvent) => {
 
   if (submitted)
     return (
-      <div className="max-w-2xl mx-auto p-8 text-center rounded-xl shadow">
+      <div className="max-w-2xl mx-auto p-8 text-center rounded-xl shadow mt-5">
         <h2 className="text-2xl font-bold text-green-600 mb-4">
           Khảo sát của bạn đã được ghi lại!
         </h2>
@@ -294,9 +294,9 @@ const handleSubmit = async (e: FormEvent) => {
     <div className=" bg-gradient-to-b from-[#bceae1] to-[#a8c0bc] w-full h-screen flex justify-center">
      
       <div className=" w-[55%] mt-10 mb-auto p-4 shadow-lg rounded-xl  bg-white">
-      <div className="bg-[#f8f8f8] p-6 rounded-[10px]">
-         <h1 className="text-3xl font-bold mb-2 text-gray-800">{survey.tieu_de}</h1>
-        <p className="text-gray-600 mb-6">{survey.mo_ta}</p>
+      <div className="bg-[#f8f6f6] p-6 rounded-[10px]">
+         <h1 className="text-3xl font-bold mb-4 text-center text-[#1d3632]">{survey.tieu_de}</h1>
+        <p className="text-gray-600 mb-6"><span className="font-bold">Mô tả:</span> {survey.mo_ta}</p>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {survey.settings.collect_email && (
@@ -313,7 +313,7 @@ const handleSubmit = async (e: FormEvent) => {
           )}
 
           {survey.questions.map((q) => {
-            const props = JSON.parse(q.props || "{}");
+            const props = typeof q.props === "string" ? JSON.parse(q.props) : q.props || {};
             const ans = answers.find((a) => a.cau_hoi_id === q.id);
 
             return (
@@ -353,22 +353,30 @@ const handleSubmit = async (e: FormEvent) => {
       })}
     </div>
   )}
-                {q.type.toLowerCase() === "true_false" && (
-                  <div className="flex gap-4">
-                    {["Có", "Không"].map((val) => (
-                      <label key={val} className="flex items-center gap-2">
+             {q.type.toLowerCase() === "true_false" && (
+                <div className="flex gap-4">
+                  {["Có", "Không"].map((val) => {
+                    const selected =
+                      ans?.lua_chon && Array.isArray(JSON.parse(ans.lua_chon))
+                        ? JSON.parse(ans.lua_chon)[0] === val
+                        : false;
+
+                    return (
+                      <label key={val} className="flex items-center gap-2 cursor-pointer">
                         <input
                           type="radio"
                           name={`true_false_${q.id}`}
                           value={val}
-                          checked={ans?.noi_dung === val}
-                          onChange={() => handleChange(q.id, val)}
+                          checked={selected}
+                          onChange={() => handleChange(q.id, val, "true_false")}
                         />
                         <span className="text-gray-700">{val}</span>
                       </label>
-                    ))}
-                  </div>
-                )}
+                    );
+                  })}
+                </div>
+              )}
+
 
                 {q.type.toLowerCase() === "rating" && (
                   <div className="flex gap-1">

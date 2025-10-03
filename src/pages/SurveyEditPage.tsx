@@ -13,7 +13,7 @@ import { Plus, Trash2, Save } from "lucide-react";
 
 interface Question {
   id: string;
-  type: "text" | "multiple-choice" | "rating" | "yes-no" | "file-upload";
+  type: "fill-blank" | "multiple-choice" | "rating" | "true-false" | "file-upload";
   title: string;
   required: boolean;
   options?: string[];
@@ -22,6 +22,7 @@ interface Question {
 interface Survey {
   title: string;
   description: string;
+  end_date?: string;
   questions: Question[];
 }
 
@@ -36,14 +37,15 @@ const SurveyEditPage = () => {
   const location = useLocation();
   const stateSurvey = location.state?.survey; // nhận dữ liệu từ Dialog
 
-  const [survey, setSurvey] = useState<Survey>({
-    title: "",
-    description: "",
-    questions: [],
-  });
+ const [survey, setSurvey] = useState<Survey>({
+  title: "",
+  description: "",
+  end_date: "", // thêm dòng này
+  questions: [],
+});
 
   const [newQuestion, setNewQuestion] = useState<Partial<Question>>({
-    type: "text",
+    type: "fill-blank",
     title: "",
     required: false,
     options: [],
@@ -54,10 +56,10 @@ const SurveyEditPage = () => {
   const token = localStorage.getItem("token") || undefined;
 
   const questionTypes = [
-    { value: "text", label: "Câu hỏi mở" },
+    { value: "fill-blank", label: "Câu hỏi mở" },
     { value: "multiple-choice", label: "Trắc nghiệm" },
     { value: "rating", label: "Đánh giá sao" },
-    { value: "yes-no", label: "Có/Không" },
+    { value: "true-false", label: "Có/Không" },
     { value: "file-upload", label: "Tải ảnh lên" },
   ];
 
@@ -70,7 +72,7 @@ const SurveyEditPage = () => {
         questions: (stateSurvey.questions || []).map((q: any) => ({
           id: q.id.toString(),
           title: q.content || q.title || "",
-          type: q.type || "text",
+          type: q.type || "fill-blank",
           required: q.required || false,
           options: q.options?.map((o: any) => o.noi_dung || o) || [],
         })),
@@ -131,7 +133,7 @@ const SurveyEditPage = () => {
       options: newQuestion.type === "multiple-choice" ? newQuestion.options || [] : undefined,
     };
     setSurvey(prev => ({ ...prev, questions: [...prev.questions, question] }));
-    setNewQuestion({ type: "text", title: "", required: false, options: [] });
+    setNewQuestion({ type: "fill-blank", title: "", required: false, options: [] });
     toast.success("Thêm câu hỏi thành công!");
   };
 
@@ -200,17 +202,29 @@ const SurveyEditPage = () => {
 
         <Card className="mb-6">
           <CardHeader><CardTitle>Thông tin cơ bản</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label>Tiêu đề khảo sát</Label>
-              <Input value={survey.title} onChange={e => setSurvey({...survey, title: e.target.value})} />
-            </div>
-            <div>
-              <Label>Mô tả</Label>
-              <Textarea value={survey.description} onChange={e => setSurvey({...survey, description: e.target.value})} />
-            </div>
-          </CardContent>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label>Tiêu đề khảo sát</Label>
+                  <Input value={survey.title} onChange={e => setSurvey({...survey, title: e.target.value})} />
+                </div>
+                <div>
+                  <Label>Mô tả</Label>
+                  <Textarea value={survey.description} onChange={e => setSurvey({...survey, description: e.target.value})} />
+                </div>
+            </CardContent>
         </Card>
+        <div className="mt-4">
+  <Label>Ngày kết thúc</Label>
+  <Input
+    type="datetime-local"
+    value={survey.end_date ? new Date(survey.end_date).toISOString().slice(0,16) : ""}
+    onChange={e => {
+      const localDate = new Date(e.target.value);
+      const utcDate = new Date(localDate.getTime() - localDate.getTimezoneOffset() * 60000);
+      setSurvey({ ...survey, end_date: utcDate.toISOString() });
+    }}
+  />
+</div>
 
         {/* Add Question */}
         <Card className="mb-6">

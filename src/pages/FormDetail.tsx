@@ -57,7 +57,7 @@ const handleCloneClick = () => {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto p-6 ">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-bold">Chi tiết khảo sát</DialogTitle>
+          <DialogTitle className="text-2xl font-bold text-center">Chi tiết khảo sát</DialogTitle>
         </DialogHeader>
         <Tabs
           value={tab}
@@ -164,13 +164,20 @@ const handleCloneClick = () => {
           </TabsContent>
 
           {/* Tab 3: Submission List */}
-          <TabsContent value="submission" className="mt-6">
-            {id && token ? (
-              <SubmissionListTab formId={id} token={token} />
-            ) : (
-              <p className="text-gray-500 text-center">Chưa có dữ liệu hoặc chưa đăng nhập</p>
-            )}
-          </TabsContent>
+<TabsContent value="submission" className="mt-6">
+  {id && token ? (
+    <SubmissionListTab formId={id} token={token} />
+  ) : (
+    <div className="flex justify-center items-center h-40 bg-gray-50 rounded-lg border border-gray-200 p-4">
+      <p className="text-gray-500 text-center">
+        Chưa có dữ liệu hoặc chưa đăng nhập
+      </p>
+    </div>
+  )}
+</TabsContent>
+
+
+
 
         </Tabs>
       </DialogContent>
