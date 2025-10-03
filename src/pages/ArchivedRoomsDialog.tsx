@@ -6,7 +6,8 @@
   import axios from "axios";
   import { toast } from "sonner";
   import { restoreRoomAPI } from "@/api/Api";
-
+  import { useSelector } from "react-redux";
+  import { RootState } from "@/redux/store";
   export interface ArchivedRoom {
     id: number | string;
     ten_room: string;
@@ -21,11 +22,13 @@
   }
 
   interface ArchivedRoomsDialogProps {
+    token: string; // token được gửi từ parent component
     onRestore?: (room: ArchivedRoom) => void;
   }
+  
 
-  export default function ArchivedRoomsDialog({ onRestore }: ArchivedRoomsDialogProps) {
-    const API_BASE = "http://localhost:8080/api";
+  export default function ArchivedRoomsDialog({ token,onRestore }: ArchivedRoomsDialogProps) {
+    const API_BASE = "https://survey-server-m884.onrender.com/api";
     const userToken = localStorage.getItem("token") || "";
     const [open, setOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
@@ -33,14 +36,13 @@
     const [loading, setLoading] = useState(false);
     const [restoringId, setRestoringId] = useState<number | string | null>(null);
     const [deletingId, setDeletingId] = useState<number | string | null>(null);
-
+    const user = useSelector((state: RootState) => state.auth.user);
     const filteredRooms = archivedRooms.filter(r =>
       r.ten_room.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (r.mo_ta || "").toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     const fetchArchivedRooms = async () => {
-      const token = localStorage.getItem("token");
       if (!token) {
         toast.error("Vui lòng đăng nhập để xem kho room");
         return;
@@ -54,12 +56,13 @@
         });
     
         const roomsData = res.data.data || [];
-    
         const rooms: ArchivedRoom[] = roomsData.map((r: any) => ({
           id: r.id,
           ten_room: r.ten_room,
           mo_ta: r.mo_ta || "",
-          members: (r.Members || r.members || []).map((m: any) => m.name || m.ten || ""),
+          members: Array.isArray(r.Members || r.members) 
+            ? (r.Members || r.members).map((m: any) => m.name || m.ten || "")
+            : [],
           ngay_tao: r.ngay_tao || r.createdAt || "",
           share_url: r.share_url || `${window.location.origin}/room/${r.id}`,
           trang_thai: "archived",
@@ -71,13 +74,7 @@
         setArchivedRooms(rooms);
     
       } catch (err: any) {
-        if (err.response?.status === 401) {
-          toast.error("Token hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại");
-          localStorage.removeItem("token");
-          localStorage.removeItem("user");
-        } else {
-          toast.error(err.response?.data?.message || "Không lấy được danh sách phòng đã lưu trữ");
-        }
+        toast.error(err.response?.data?.message || "Không lấy được danh sách phòng đã lưu trữ");
       } finally {
         setLoading(false);
       }
@@ -87,22 +84,14 @@
     
 
     const handleRestore = async (id: number | string) => {
-      const token = localStorage.getItem("token");
       if (!token) return;
     
       try {
         setRestoringId(id);
-        
-        // Gọi API và lấy dữ liệu backend trả về
         const res = await restoreRoomAPI(Number(id), token);
-        const restoredRoom = res.data; // <- dữ liệu backend có is_public đúng
-    
-        // Xóa phòng khỏi archivedRooms
+        const restoredRoom = res.data;
         setArchivedRooms(prev => prev.filter(r => String(r.id) !== String(id)));
-    
-        // Cập nhật FE nếu cần
         if (onRestore) onRestore(restoredRoom);
-    
         toast.success("Khôi phục phòng thành công");
       } catch (err: any) {
         toast.error(err.response?.data?.message || "Không thể khôi phục phòng");
@@ -111,15 +100,14 @@
       }
     };
     
-
     const handleDelete = async (id: number | string) => {
-      if (!userToken) return;
+      if (!token) return;
       if (!confirm("Bạn có chắc muốn xóa phòng này vĩnh viễn?")) return;
-
+    
       try {
         setDeletingId(id);
         await axios.delete(`${API_BASE}/rooms/${id}`, {
-          headers: { Authorization: `Bearer ${userToken}` },
+          headers: { Authorization: `Bearer ${token}` },
         });
         setArchivedRooms(prev => prev.filter(r => String(r.id) !== String(id)));
         toast.success("Xóa phòng thành công");
@@ -129,6 +117,7 @@
         setDeletingId(null);
       }
     };
+    
 
     useEffect(() => {
       if (open) fetchArchivedRooms();

@@ -26,12 +26,19 @@ import {
 import { enterRoomAPI } from "@/api/Api";
 import { getRoomParticipantsAPI } from "@/api/Api";
 import { enterRoomByShareURL } from "@/api/Api";
+import { ensureOwnerInMembers } from "@/utils/roomUtils";
+import { jwtDecode } from "jwt-decode";
+// Room.tsx
+import type { EnterRoomResponse } from "@/api/Api"; // đường dẫn chính xác tới file Api.tsx
+
 
 interface Member {
     id: string;        // user_id (string hóa để đồng nhất key React)
     name: string;      // tên người dùng
     email?: string;    // optional vì API có thể không trả
     status?: string;   // trạng thái tham gia (pending, accepted, ...)
+    canRemove?: boolean; // ✅ thêm vào, optional cho đỡ lỗi
+
 }
 interface KhaoSatSummary {
     id: number;
@@ -48,6 +55,8 @@ interface Room {
     ten_room: string;
     mo_ta?: string | null;
     ngay_tao?: string;
+    nguoi_tao_ten?: string;   // 👈 thêm tên chủ phòng
+    nguoi_tao_email?: string;
     share_url?: string;
     trang_thai?: "active" | "deleted" | "archived";
     is_public?: boolean;
@@ -55,16 +64,20 @@ interface Room {
     mat_khau?: string;
     members?: Member[];
     khao_sat?: KhaoSatSummary;
-
+    isMine?: boolean; // 👈 thêm dòng này
     // ✅ Thêm 2 trường để dùng trong form edit/create
     khao_sat_id?: number | null;
     khao_sat_link?: string | null;
+    joined?: boolean;   // 👈 thêm ở đây
+
 }
 
 
 interface RoomWithIsMine extends Room {
     isMine?: boolean;
     owner_id?: number | string;
+    joined?: boolean; // <-- thêm đây
+
 }
 interface Survey {
     id: number;
@@ -91,303 +104,286 @@ const RoomPage = () => {
     const [editRoom, setEditRoom] = useState<Room | null>(null);
     const [showEditForm, setShowEditForm] = useState(false);
     const [archiveDialogRoom, setArchiveDialogRoom] = useState<Room | null>(null);
-    const token = localStorage.getItem("token");
-    const userId = Number(localStorage.getItem("user_id") || 0); // ép về number
-    const API_BASE = "http://localhost:8080/api";
+    const token = localStorage.getItem("token") || "";
+    const userId = Number(localStorage.getItem("user_id") || 0);
+    const API_BASE = "https://survey-server-m884.onrender.com/api";
     const [selectedRoom, setSelectedRoom] = useState<RoomWithIsMine | null>(null);
     const [members, setMembers] = useState<Member[]>([]);
     const [showInviteDialog, setShowInviteDialog] = useState(false);
     const [membersLoading, setMembersLoading] = useState(false); // 👈 Thêm loading cho members
     const [joinRoomURL, setJoinRoomURL] = useState("");
     const [mySurveys, setMySurveys] = useState<Survey[]>([]);
-    const [surveyLink, setSurveyLink] = useState<string | null>(null);
-
-    const [isLocking, setIsLocking] = useState(false);
-
+    const [roomPassword, setRoomPassword] = useState("");
+    const [shouldOpenDialog, setShouldOpenDialog] = useState(false);
+    const [requirePassword, setRequirePassword] = useState(false);
+    const [currentOpenedRoomId, setCurrentOpenedRoomId] = useState<string | null>(null);
     // Trong component, trước return JSX
     const localSurveyUrl = localStorage.getItem("latest_survey_url") || null;
-    useEffect(() => {
-        const token = localStorage.getItem("token");
-        if (!token) return;
+    const [surveyLink, setSurveyLink] = useState<string | null>(null);
+    const [isLocking, setIsLocking] = useState(false);
 
+    useEffect(() => {
+        if (!token) return;
         getMyFormsAPI(token)
-            .then(data => {
-                const surveys = (data || []).map((s: any) => ({
-                    ...s,
-                    tieu_de: s.title,      // <-- map title từ API thành tieu_de
-                    public_link: s.public_link || null,
+            .then((data) => {
+                const surveys: Survey[] = (data || []).map((s: any) => ({
                     id: s.id,
+                    tieu_de: s.title,
+                    public_link: s.public_link || null,
+                    mo_ta: s.mo_ta || "",
                 }));
                 setMySurveys(surveys);
             })
-            .catch(err => toast.error("Không tải được khảo sát của bạn"));
+            .catch(() => toast.error("Không tải được khảo sát của bạn"));
     }, []);
-
-    // ================= KHÓA / MỞ KHÓA PHÒNG =================
-const handleLockRoom = async (roomId: number, lock: boolean) => {
-  if (!token) return toast.error("Bạn phải đăng nhập để thực hiện");
-
-  try {
-    setIsLocking(true);
-
-    let res;
-    if (lock) {
-      // Lock room
-      res = await axios.post(`${API_BASE}/rooms/${roomId}/lock`, null, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-    } else {
-      // Unlock room
-      res = await axios.put(`${API_BASE}/rooms/${roomId}/unlock`, null, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-    }
-
-    // Cập nhật state
-    setSelectedRoom(prev => prev ? { ...prev, is_locked: lock } : prev);
-    setMyRooms(prev => prev.map(r => r.id === roomId ? { ...r, is_locked: lock } : r));
-    setPublicRooms(prev => prev.map(r => r.id === roomId ? { ...r, is_locked: lock } : r));
-
-    toast.success(res.data.message || `Phòng đã ${lock ? 'khóa' : 'mở khóa'}`);
-  } catch (err: any) {
-    if (err.response?.status === 401) toast.error("Bạn phải đăng nhập để thực hiện hành động này");
-    else if (err.response?.status === 403) toast.error("Bạn không có quyền thực hiện hành động này");
-    else if (err.response?.status === 404) toast.error("Phòng không tồn tại");
-    else toast.error(err.response?.data?.error || "Không thể thay đổi trạng thái phòng");
-  } finally {
-    setIsLocking(false);
-  }
-};
-
-
-
-    const fetchMembers = async (roomId: number) => {
-        if (!token) return;
-        try {
-            const res = await getRoomParticipantsAPI(roomId, token);
-            const mappedMembers: Member[] = (res.data.participants || []).map((p: any) => ({
-                id: String(p.user_id),          // dùng user_id làm id
-                name: p.ten_nguoi_dung || "",   // map tên
-                email: p.email || ""            // nếu API không có email thì để rỗng
-            }));
-            setMembers(mappedMembers);
-        } catch (err: any) {
-            toast.error("Không lấy được danh sách thành viên");
-        }
-    };
-
-    const checkRoomExists = async (roomId) => {
-        try {
-            const response = await axios.get(`${API_BASE}/rooms/${roomId}`, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            return response.data; // Nếu phòng tồn tại, trả về dữ liệu phòng
-        } catch (error) {
-            console.error("Phòng không tồn tại:", error.response.data);
-            return null; // Nếu phòng không tồn tại, trả về null
-        }
-    };
     const handleJoinRoomByURL = async () => {
-        if (!joinRoomURL) return toast.error("Vui lòng nhập URL phòng");
+        if (!joinRoomURL) {
+            toast.error("Vui lòng nhập URL phòng");
+            return;
+        }
 
-        console.log("👉 joinRoomURL nhập vào:", joinRoomURL);
+        console.log("🔹 [handleJoinRoomByURL] joinRoomURL:", joinRoomURL);
 
+        // Lấy shareURL từ link
         const roomIdMatch = joinRoomURL.match(
             /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i
         );
-        console.log("👉 roomIdMatch:", roomIdMatch);
-
         if (!roomIdMatch) {
             toast.error("URL không hợp lệ");
             return;
         }
-
         const shareURL = roomIdMatch[0];
-        console.log("👉 shareURL lấy được từ URL:", shareURL);
-
-        const alreadyJoined = myRooms.some(r => r.share_url === shareURL);
-        console.log("👉 alreadyJoined:", alreadyJoined);
-
-        if (alreadyJoined) return toast.error("Bạn đã là thành viên của phòng này");
-
-        const mapToMember = (p: any): Member => ({
-            id: String(p.user_id ?? p.id),
-            name: p.ten_nguoi_dung || "",
-            email: p.email || "",
-            status: p.status,
-        });
+        console.log("🔹 [handleJoinRoomByURL] Extracted shareURL:", shareURL);
 
         try {
-            console.log("👉 Gọi API enterRoomByShareURL với:", shareURL);
-            const response = await enterRoomByShareURL(shareURL);
-            console.log("👉 Response từ API:", response);
+            // Lấy thông tin phòng
+            const roomRes = await axios.get(`${API_BASE}/rooms/share/${shareURL}`);
+            const roomData = roomRes.data.room || roomRes.data;
+            console.log("🔹 [handleJoinRoomByURL] Fetched room data:", roomData);
 
-            const roomData = response.room as any;
+            // Nếu phòng yêu cầu mật khẩu nhưng user chưa nhập → bật input
+            if (roomData.require_password && !roomPassword) {
+                setRequirePassword(true);
+                toast.info("Phòng này yêu cầu mật khẩu, vui lòng nhập");
+                return; // dừng ở đây, chờ người dùng nhập password
+            }
 
+            // Gọi API join phòng, truyền password nếu có
+            const enterRes: EnterRoomResponse = await enterRoomByShareURL(
+                shareURL,
+                roomPassword || undefined
+            );
+            console.log("🔹 [handleJoinRoomByURL] enterRoomByShareURL response:", enterRes);
+
+            const joinedRoom = enterRes.room;
+
+            // Map members
+            const members: Member[] = (joinedRoom.members || []).map((p) => ({
+                id: String(p.user_id ?? p.id),
+                name: p.ten_nguoi_dung || "Người dùng",
+                email: "",
+                status: p.status || "active",
+            }));
+
+            // Thêm owner nếu chưa có
+            const ownerId = String(roomData.nguoi_tao_id);
+            if (!members.some((m) => m.id === ownerId)) {
+                members.unshift({
+                    id: ownerId,
+                    name: roomData.nguoi_tao_ten || "Chủ phòng",
+                    email: roomData.nguoi_tao_email || "",
+                    status: "owner",
+                });
+            }
+
+            // Room object đầy đủ
             const newRoom: RoomWithIsMine = {
-                ...roomData,
-                nguoi_tao_id: Number(roomData.nguoi_tao_id ?? userId),
-                members: (roomData.members || []).map(mapToMember),
-                share_url: roomData.share_url || shareURL,
-                isMine: String(roomData.nguoi_tao_id) === String(userId),
+                ...joinedRoom,
+                nguoi_tao_id: ownerId,
+                members,
+                share_url: joinedRoom.share_url || shareURL,
+                isMine: ownerId === String(userId),
+                joined: true,
             };
 
-            console.log("👉 newRoom object:", newRoom);
+            // Lưu state
+            setMyRooms((prev) => {
+                const exists = prev.some((r) => r.id === newRoom.id);
+                const newRooms = exists
+                    ? prev.map((r) => (r.id === newRoom.id ? newRoom : r))
+                    : [...prev, newRoom];
+                localStorage.setItem("myRooms", JSON.stringify(newRooms));
+                return newRooms;
+            });
 
-            setMyRooms(prev => [...prev, newRoom]);
+            setPublicRooms(prev => {
+                return prev.map(r => {
+                    if (r.id === newRoom.id) {
+                        return { ...r, members: newRoom.members }; // đảm bảo owner được hiển thị
+                    }
+                    return r;
+                });
+            });
+
+            setSelectedRoom(newRoom);
+            setMembers(members);
+            localStorage.setItem("selectedRoom", JSON.stringify(newRoom));
+
+            // Reset state input password
             toast.success("Bạn đã tham gia phòng thành công");
             setJoinRoomURL("");
+            setRoomPassword("");
+            setRequirePassword(false);
+
         } catch (error: any) {
-            console.error("❌ Lỗi khi join room:", error);
-
-            if (error.response?.data?.error === "Vui lòng nhập mật khẩu") {
-                const password = prompt("Nhập mật khẩu phòng:");
-                if (!password) return toast.error("Bạn chưa nhập mật khẩu");
-
-                try {
-                    console.log("👉 Gọi API enterRoomByShareURL với password");
-                    const responseWithPass = await enterRoomByShareURL(shareURL, password);
-                    console.log("👉 ResponseWithPass:", responseWithPass);
-
-                    const roomData = responseWithPass.room as any;
-
-                    const newRoom: RoomWithIsMine = {
-                        ...roomData,
-                        nguoi_tao_id: Number(roomData.nguoi_tao_id ?? userId),
-                        members: (roomData.members || []).map(mapToMember),
-                        share_url: roomData.share_url || shareURL,
-                        isMine: String(roomData.nguoi_tao_id) === String(userId),
-                    };
-
-                    setMyRooms(prev => [...prev, newRoom]);
-                    toast.success("Bạn đã tham gia phòng thành công");
-                    setJoinRoomURL("");
-                } catch (err) {
-                    console.error("❌ Lỗi khi join với password:", err);
-                    toast.error("Sai mật khẩu hoặc không thể tham gia phòng");
+            console.error("❌ [handleJoinRoomByURL] Lỗi khi join room:", error);
+            if (axios.isAxiosError(error)) {
+                console.log("🔹 [handleJoinRoomByURL] Axios error response:", error.response?.data);
+                if (error.response?.status === 400 && error.response?.data?.error?.includes("mật khẩu")) {
+                    setRequirePassword(true);
+                    toast.error("Sai mật khẩu, vui lòng thử lại");
+                } else {
+                    toast.error(error.response?.data?.message || "Không thể tham gia phòng");
                 }
             } else {
-                toast.error("Không thể tham gia phòng, vui lòng kiểm tra lại URL");
+                toast.error("Lỗi không xác định khi tham gia phòng");
             }
         }
     };
-
-
-    const fetchPublicRooms = async () => {
-        try {
-            const res = await axios.get(`${API_BASE}/lobby`);
-            const rooms: Room[] = res.data.data || res.data.rooms || [];
-
-            const roomsWithMembers = await Promise.all(
-                rooms
-                    .filter(r => r.trang_thai !== "archived" && r.is_public)
-                    .map(async r => {
-                        try {
-                            const resMembers = await axios.get(`${API_BASE}/rooms/${r.id}/participants`);
-                            const mappedMembers: Member[] = (resMembers.data.participants || []).map((p: any) => ({
-                                id: String(p.user_id),
-                                name: p.ten_nguoi_dung || "",
-                                email: p.email || ""
-                            }));
-                            return { ...r, members: mappedMembers, share_url: r.share_url || `${window.location.origin}/room/${r.id}` };
-                        } catch {
-                            return { ...r, members: [], share_url: r.share_url || `${window.location.origin}/room/${r.id}` };
-                        }
-                    })
-            );
-            setPublicRooms(roomsWithMembers);
-        } catch (err) {
-            console.error("Lỗi khi fetch public rooms:", err);
-        }
-    };
-
-
     const fetchRooms = async () => {
         if (!token) return;
+
         try {
-            const resMy = await axios.get(`${API_BASE}/rooms`, { headers: { Authorization: `Bearer ${token}` } });
-            const resPublic = await axios.get(`${API_BASE}/lobby`);
+            // 1️⃣ Fetch rooms từ backend
+            const [resMy, resPublic] = await Promise.all([
+                axios.get(`${API_BASE}/rooms`, { headers: { Authorization: `Bearer ${token}` } }),
+                axios.get(`${API_BASE}/lobby`),
+            ]);
 
             const myData: Room[] = resMy.data.data || [];
-            const publicData: Room[] = resPublic.data.data || resPublic.data.rooms || []; // 👈 sửa lại
+            const publicData: Room[] = resPublic.data.data || resPublic.data.rooms || [];
 
-            const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+            const currentUserId = String(userId);
+            const savedMyRooms: Room[] = JSON.parse(localStorage.getItem("myRooms") || "[]");
+            const savedSelectedRoom: Room | null = JSON.parse(localStorage.getItem("selectedRoom") || "null");
 
+            const ensureOwnerInMembers = (room: Room, members: Member[]): Member[] => {
+                if (!members.some(m => String(m.id) === String(room.nguoi_tao_id))) {
+                    members.unshift({
+                        id: String(room.nguoi_tao_id),
+                        name: "Chủ phòng",
+                        email: "",
+                        status: "owner",
+                    });
+                }
+                return members;
+            };
+
+            // ========== MY ROOMS ==========
             const myRoomsWithMembers: Room[] = await Promise.all(
                 myData.map(async r => {
                     try {
-                        const resMembers = await axios.get(`${API_BASE}/rooms/${r.id}/participants`);
-                        const mappedMembers: Member[] = (resMembers.data.participants || []).map((p: any) => ({
+                        const resMembers = await axios.get(`${API_BASE}/rooms/${r.id}/participants`, { headers: { Authorization: `Bearer ${token}` } });
+                        let members: Member[] = (resMembers.data.participants || []).map((p: any) => ({
                             id: String(p.user_id),
                             name: p.ten_nguoi_dung || "",
                             email: p.email || "",
-                            status: p.status || undefined,
+                            status: p.status || "active"
                         }));
-
-                        return {
-                            ...r,
-                            nguoi_tao_id: String(r.nguoi_tao_id ?? userId),
-                            members: mappedMembers,
-                            share_url: r.share_url || `${window.location.origin}/room/${r.id}`,
-                            isMine: r.nguoi_tao_id === userId, // ✅ so sánh trực tiếp
-                        };
+                        members = ensureOwnerInMembers(r, members);
+                        return { ...r, nguoi_tao_id: String(r.nguoi_tao_id), members, isMine: String(r.nguoi_tao_id) === currentUserId, joined: true };
                     } catch {
-                        const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
-                        return {
-                            ...r,
-                            members: [
-                                {
-                                    id: String(userId), // ✅ ép sang string
-                                    name: storedUser.Ten || "Bạn",
-                                    email: storedUser.email || "",
-                                    status: "owner",
-                                },
-                            ],
-                        };
+                        return { ...r, members: [], nguoi_tao_id: String(r.nguoi_tao_id), joined: true };
                     }
                 })
             );
 
-
-
+            // ========== PUBLIC ROOMS ==========
+            // ========== PUBLIC ROOMS ==========
             const publicRoomsWithMembers: Room[] = await Promise.all(
                 publicData.map(async (r) => {
                     try {
-                        const resMembers = await axios.get(`${API_BASE}/rooms/${r.id}/participants`, {
-                            headers: { Authorization: `Bearer ${token}` },
-                        });
+                        // Gọi API participants giống như myRooms
+                        const resMembers = await axios.get(
+                            `${API_BASE}/rooms/${r.id}/participants`,
+                            { headers: { Authorization: `Bearer ${token}` } }
+                        );
 
-                        const mappedMembers: Member[] = (resMembers.data.participants || []).map((p: any) => ({
+                        let members: Member[] = (resMembers.data.participants || []).map((p: any) => ({
                             id: String(p.user_id),
                             name: p.ten_nguoi_dung || "",
                             email: p.email || "",
-                            status: p.status || undefined,
+                            status: p.status || "active",
                         }));
+
+                        // Thêm chủ phòng nếu chưa có
+                        if (!members.some(m => String(m.id) === String(r.nguoi_tao_id))) {
+                            members.unshift({
+                                id: String(r.nguoi_tao_id),
+                                name: r.nguoi_tao_ten || "Chủ phòng",
+                                email: r.nguoi_tao_email || "",
+                                status: "owner",
+                            });
+                        }
+
+                        const isJoined = members.some(m => m.id === String(userId));
 
                         return {
                             ...r,
-                            members: mappedMembers,
-                            share_url: r.share_url || `${window.location.origin}/room/${r.id}`,
+                            nguoi_tao_id: String(r.nguoi_tao_id),
+                            members,
                             isMine: String(r.nguoi_tao_id) === String(userId),
+                            joined: isJoined,
                         };
-                    } catch (err) {
-                        console.error("Không lấy được member cho public room", r.id, err);
-                        return { ...r, members: [] };
+                    } catch {
+                        // fallback nếu gọi participants lỗi
+                        return {
+                            ...r,
+                            nguoi_tao_id: String(r.nguoi_tao_id),
+                            members: [
+                                {
+                                    id: String(r.nguoi_tao_id),
+                                    name: r.nguoi_tao_ten || "Chủ phòng",
+                                    email: r.nguoi_tao_email || "",
+                                    status: "owner",
+                                },
+                            ],
+                            joined: false,
+                        };
                     }
                 })
             );
 
-            setMyRooms(myRoomsWithMembers);
+
+            // ========== MERGE WITH LOCALSTORAGE ==========
+            const mergedMyRooms: Room[] = [...myRoomsWithMembers, ...publicRoomsWithMembers.filter(r => r.joined && !r.isMine)].map(r => {
+                const saved = savedMyRooms.find(s => s.id === r.id);
+                const joined = saved?.joined || r.isMine || r.joined || false;
+                const members = r.members && r.members.length > 0 ? r.members : saved?.members || [];
+                return { ...r, ...saved, members, joined };
+            });
+
+            setMyRooms(mergedMyRooms);
+            localStorage.setItem("myRooms", JSON.stringify(mergedMyRooms));
             setPublicRooms(publicRoomsWithMembers);
 
-            if (selectedRoom) {
-                const updated = [...myRoomsWithMembers, ...publicRoomsWithMembers].find(r => r.id === selectedRoom.id);
-                if (updated) setSelectedRoom({ ...updated, isMine: selectedRoom.isMine });
-                setMembers(updated?.members || []);
+            // cập nhật selectedRoom
+            if (savedSelectedRoom) {
+                const updatedSelected = mergedMyRooms.find(r => String(r.id) === String(savedSelectedRoom.id));
+                if (updatedSelected) {
+                    setSelectedRoom(updatedSelected);
+                    setMembers(updatedSelected.members || []);
+                } else {
+                    setSelectedRoom(null);  // phòng không còn → tắt dialog
+                    setMembers([]);
+                }
             }
+
+
+
         } catch (err: any) {
-            toast.error(err.response?.data?.message || "Không lấy được danh sách phòng");
-            console.error(err);
+            console.error("Lỗi fetchRooms:", err);
+            toast.error("Không lấy được danh sách phòng");
         }
     };
 
@@ -395,23 +391,48 @@ const handleLockRoom = async (roomId: number, lock: boolean) => {
         if (!selectedRoom) return;
         setMembers(selectedRoom.members || []);
     }, [selectedRoom]);
-    useEffect(() => {
-        fetchPublicRooms(); // fetch ngay khi mount
-        fetchRooms(); // fetch ngay khi mount
-        const interval = setInterval(fetchRooms, 10000); // 10s
-        return () => clearInterval(interval);
-    }, []);
     const handleRemoveMember = async (roomId: number, memberId: string) => {
         if (!token) return toast.error("Bạn phải đăng nhập để xoá thành viên");
+
         try {
+            console.log("🚀 removeMemberAPI called ", { roomId, memberId });
             await removeMemberAPI(roomId, token, memberId);
-            setSelectedRoom(prev => prev ? { ...prev, members: prev.members?.filter(m => m.id !== memberId) } : prev);
-            setMyRooms(prev => prev.map(r => r.id === roomId ? { ...r, members: r.members?.filter(m => m.id !== memberId) } : r));
             toast.success("Đã xoá thành viên");
+
+            // Lấy lại dữ liệu phòng từ server
+            const resRoom = await getRoomDetailAPI(roomId, token);
+            const roomData: Room = resRoom.data;
+
+            // ✅ Thêm owner vào members nếu chưa có
+            const ownerId = String(roomData.nguoi_tao_id);
+            const ownerName = roomData.nguoi_tao_ten || "Chủ phòng";
+            const ownerEmail = roomData.nguoi_tao_email || "";
+
+            const updatedMembers = ensureOwner(roomData.members || [], ownerId, ownerName, ownerEmail);
+
+            // Cập nhật myRooms
+            setMyRooms(prev => prev.map(room =>
+                room.id === roomId ? { ...room, members: updatedMembers } : room
+            ));
+
+            // Cập nhật selectedRoom nếu đang mở
+            setSelectedRoom(prev => {
+                if (!prev || prev.id !== roomId) return prev;
+                return { ...prev, members: updatedMembers };
+            });
+
+            // Cập nhật localStorage
+            const updatedRooms = myRooms.map(room =>
+                room.id === roomId ? { ...room, members: updatedMembers } : room
+            );
+            localStorage.setItem("myRooms", JSON.stringify(updatedRooms));
+
         } catch (err: any) {
+            console.error("❌ removeMemberAPI error", err);
             toast.error(err.response?.data?.message || "Không thể xoá thành viên");
         }
     };
+
     const handleCreateRoom = async () => {
         if (!token) return toast.error("Bạn phải đăng nhập mới tạo được phòng");
         if (!newRoom.ten_room.trim()) return toast.error("Tên phòng không được để trống");
@@ -422,52 +443,47 @@ const handleLockRoom = async (roomId: number, lock: boolean) => {
             const res = await axios.post(
                 `${API_BASE}/rooms`,
                 {
-                    khao_sat_id: newRoom.khao_sat_id, // ✅ dùng ID thực tế
+                    khao_sat_id: newRoom.khao_sat_id,
                     ten_room: newRoom.ten_room,
                     mo_ta: newRoom.mo_ta,
                     is_public: newRoom.is_public,
+                    mat_khau: newRoom.mat_khau?.trim() || null,
+                    khoa: !!newRoom.mat_khau?.trim(),
                 },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
 
-            const roomData = res.data.data; // backend trả về Room
-            const surveyFromDB = roomData.khao_sat; // khảo sát từ backend
-            const surveyUrl = surveyFromDB?.public_link || localSurveyUrl; // fallback local
+            const roomData = res.data.data;
 
-            const newCreatedRoom: Room = {
-                id: roomData.id,
-                ten_room: roomData.ten_room,
-                mo_ta: roomData.mo_ta,
-                is_public: roomData.is_public,
-                nguoi_tao_id: userId,
-                trang_thai: "active",
-                ngay_tao: new Date().toISOString(),
-                share_url: roomData.share_url || `${window.location.origin}/room/${roomData.id}`,
-                khao_sat: surveyFromDB
-                    ? { ...surveyFromDB, public_link: surveyUrl }
-                    : surveyUrl
-                        ? { id: 0, tieu_de: "Khảo sát mới", mo_ta: "", public_link: surveyUrl }
-                        : null,
+            // Lấy thông tin user hiện tại
+            const user = JSON.parse(localStorage.getItem("user") || "{}");
+            const currentUserIdStr = String(userId);
+
+            const newCreatedRoom: RoomWithIsMine = {
+                ...roomData,
+                nguoi_tao_id: currentUserIdStr,
+                nguoi_tao_ten: user.Ten || "Bạn",
+                nguoi_tao_email: user.email || "",
                 members: [
                     {
-                        id: String(userId), // ép sang string
-                        name: JSON.parse(localStorage.getItem("user") || "{}").Ten || "Bạn",
-                        email: JSON.parse(localStorage.getItem("user") || "{}").email || ""
-                    }
+                        id: currentUserIdStr,
+                        name: "Bạn",
+                        email: user.email || "",
+                        status: "owner",
+                        canRemove: false,
+                    },
                 ],
+                isMine: true,
+                joined: true,
+                khao_sat_link: newRoom.khao_sat_link || localSurveyUrl || null,
             };
-
-            // ✅ Cập nhật surveyLink trong newRoom
-            if (surveyUrl) {
-                localStorage.setItem("latest_survey_url", surveyUrl);
-                setNewRoom(prev => ({ ...prev, khao_sat_link: surveyUrl }));
-            }
 
             setMyRooms(prev => [newCreatedRoom, ...prev]);
             if (newRoom.is_public) setPublicRooms(prev => [newCreatedRoom, ...prev]);
 
+            localStorage.setItem("myRooms", JSON.stringify([newCreatedRoom, ...myRooms]));
+
             toast.success(`Phòng "${newRoom.ten_room}" đã tạo`);
-            // ✅ Reset state newRoom đầy đủ
             setNewRoom({
                 ten_room: "",
                 mo_ta: "",
@@ -482,8 +498,6 @@ const handleLockRoom = async (roomId: number, lock: boolean) => {
             toast.error(err.response?.data?.message || "Không tạo được phòng");
         }
     };
-
-
     const openEditRoom = (room: Room) => {
         setEditRoom({ ...room, mat_khau: "" });
         setShowEditForm(true);
@@ -493,11 +507,16 @@ const handleLockRoom = async (roomId: number, lock: boolean) => {
     const handleUpdateRoom = async () => {
         if (!token || !editRoom) return;
         try {
+            // Cập nhật phòng
             await updateRoomAPI(editRoom.id, token, {
                 ten_room: editRoom.ten_room,
                 mo_ta: editRoom.mo_ta,
-                is_public: editRoom.is_public
+                is_public: editRoom.is_public,
+                khao_sat_id: editRoom.khao_sat_id,      // <-- thêm id khảo sát
+                khao_sat_link: editRoom.khao_sat_link   // <-- thêm link khảo sát
             });
+
+            // Cập nhật mật khẩu
             if (editRoom.khoa && editRoom.mat_khau?.trim()) {
                 await setRoomPasswordAPI(editRoom.id, token, editRoom.mat_khau);
             } else if (!editRoom.khoa) {
@@ -512,6 +531,7 @@ const handleLockRoom = async (roomId: number, lock: boolean) => {
             toast.error(err.response?.data?.message || "Không cập nhật được phòng");
         }
     };
+
     const handleArchiveRoom = async (roomId: number) => {
         if (!token) return toast.error("Bạn phải đăng nhập mới lưu trữ được phòng");
         try {
@@ -534,44 +554,106 @@ const handleLockRoom = async (roomId: number, lock: boolean) => {
                 toast.error("Sao chép thất bại");
             });
     };
+    // Helper thêm owner vào đầu danh sách nếu chưa có
+    const ensureOwner = (
+        members: Member[] = [],
+        ownerId?: string | number | null,
+        ownerName?: string | null,
+        ownerEmail?: string | null
+    ): Member[] => {
+        if (!ownerId) return [...members];
+
+        const ownerIdStr = String(ownerId);
+        let updated = [...members];
+
+        const idx = updated.findIndex(m => String(m.id) === ownerIdStr);
+
+        if (idx === -1) {
+            updated.unshift({
+                id: ownerIdStr,
+                name: ownerName || "Chủ phòng",
+                email: ownerEmail && ownerEmail.trim() !== "" ? ownerEmail : "Chưa cập nhật",
+                status: "owner",
+            });
+        } else {
+            updated[idx] = {
+                ...updated[idx],
+                status: "owner",
+                name: updated[idx].name || ownerName || "Chủ phòng",
+                email: updated[idx].email && updated[idx].email.trim() !== ""
+                    ? updated[idx].email
+                    : ownerEmail && ownerEmail.trim() !== ""
+                        ? ownerEmail
+                        : "Chưa cập nhật",
+            };
+
+            if (idx > 0) {
+                const [owner] = updated.splice(idx, 1);
+                updated.unshift(owner);
+            }
+        }
+
+        return updated;
+    };
+
     const handleOpenRoom = async (room: Room) => {
-        if (!token) return;
+        setCurrentOpenedRoomId(String(room.id));
+        setMembersLoading(true);
+        setSelectedRoom(room); // set room hiện tại
+        setShouldOpenDialog(true);
+
         try {
             const detail = await getRoomDetailAPI(room.id, token);
-            const mappedMembers: Member[] = (detail.data.members || []).map((p: any) => ({
-                id: String(p.user_id),
-                name: p.ten_nguoi_dung || "",
-                email: p.email || ""
+
+            const currentUserId = String(userId);
+
+            // map members, fallback cho name/email
+            let mappedMembers: Member[] = (detail.data.members || []).map((p: any) => ({
+                id: String(p.user_id ?? p.id),
+                name: p.ten_nguoi_dung || p.name || p.email || "Người dùng",
+                email: p.email || "",
+                status: p.status || "active",
+                canRemove: true,
             }));
 
-            const surveyFromDB = detail.data.khao_sat;
-            const localSurveyUrl = room.khao_sat?.public_link || localStorage.getItem("latest_survey_url") || null;
+            // Thêm owner vào đầu danh sách nếu chưa có
+            const ownerId = String(detail.data.nguoi_tao_id || room.nguoi_tao_id);
+            const ownerName = detail.data.nguoi_tao_ten || room.nguoi_tao_ten || "Chủ phòng";
+            const ownerEmail = detail.data.nguoi_tao_email || room.nguoi_tao_email || "";
+            mappedMembers = ensureOwner(mappedMembers, ownerId, ownerName, ownerEmail);
+
+            // Đổi tên currentUser thành "Bạn"
+            mappedMembers = mappedMembers.map(m =>
+                m.id === currentUserId ? { ...m, name: "Bạn" } : m
+            );
 
             const fullRoom: RoomWithIsMine = {
                 ...room,
                 ...detail.data,
                 members: mappedMembers,
-                khao_sat: surveyFromDB
-                    ? { ...surveyFromDB, public_link: surveyFromDB.public_link || localSurveyUrl }
-                    : room.khao_sat
-                        ? { ...room.khao_sat, public_link: room.khao_sat.public_link || localSurveyUrl }
-                        : localSurveyUrl
-                            ? { id: 0, tieu_de: "", mo_ta: "", public_link: localSurveyUrl }
-                            : null,
-                isMine: String(room.nguoi_tao_id) === String(userId),
+                isMine: ownerId === currentUserId,
+                joined: true,
+                khao_sat: detail.data.khao_sat || room.khao_sat || null,
+                khao_sat_link: detail.data.khao_sat?.public_link || room.khao_sat?.public_link || null,
             };
 
             setSelectedRoom(fullRoom);
             setMembers(mappedMembers);
-        } catch (err: any) {
-            toast.error(err.message || "Không lấy được chi tiết phòng");
+        } catch (err) {
+            console.error("❌ handleOpenRoom error:", err);
+            setSelectedRoom(room);
+            setMembers([]);
+        } finally {
+            setMembersLoading(false);
         }
     };
 
 
     const enterRoom = async (room: Room) => {
         if (!token) return toast.error("Bạn phải đăng nhập để tham gia phòng");
+
         let password: string | undefined;
+
         try {
             if (room.khoa) {
                 password = prompt("Nhập mật khẩu phòng:");
@@ -579,29 +661,333 @@ const handleLockRoom = async (roomId: number, lock: boolean) => {
             }
 
             const res = await enterRoomAPI(room.id, password, token);
+            const roomData = res.room;
+            if (!roomData) return toast.error("Không thể tham gia phòng, dữ liệu không hợp lệ.");
 
-            // Kiểm tra phản hồi từ API
-            if (res && res.data && res.data.room) {
-                toast.success("Bạn đã tham gia phòng thành công");
-                const members = res.data.room.members || []; // Sử dụng danh sách thành viên trả về từ backend
-                const updatedRoom: Room = { ...res.data.room, members };
+            // Map members và đảm bảo owner luôn có mặt
+            const members: Member[] = ((roomData.members || []) as any[]).map(m => ({
+                id: String(m.user_id ?? m.id),
+                name: m.ten_nguoi_dung || m.name || "",
+                email: m.email || "",
+                status: m.status,
+            }));
 
-                setMyRooms(prev => {
-                    const exist = prev.find(r => r.id === updatedRoom.id);
-                    return exist ? prev.map(r => r.id === updatedRoom.id ? updatedRoom : r) : [...prev, updatedRoom];
+            if (!members.some(m => String(m.id) === String(roomData.nguoi_tao_id))) {
+                members.unshift({
+                    id: String(roomData.nguoi_tao_id),
+                    name: "Chủ phòng",
+                    email: "",
+                    status: "owner",
                 });
-
-                setPublicRooms(prev => prev.map(r => r.id === updatedRoom.id ? updatedRoom : r));
-                setSelectedRoom({ ...updatedRoom, isMine: true });
-                setMembers(members); // Cập nhật danh sách thành viên trong trạng thái
-            } else {
-                toast.error("Không thể tham gia phòng, dữ liệu không hợp lệ.");
             }
+
+            const updatedRoom: RoomWithIsMine = {
+                ...roomData,
+                nguoi_tao_id: String(roomData.nguoi_tao_id),
+                members,
+                share_url: roomData.share_url || `${window.location.origin}/room/${roomData.id}`,
+                isMine: String(roomData.nguoi_tao_id) === String(userId),
+                joined: true,
+            };
+
+            // ✅ Cập nhật myRooms và lưu localStorage
+            setMyRooms(prev => {
+                const exists = prev.some(r => r.id === updatedRoom.id);
+                const newRooms = exists
+                    ? prev.map(r => (r.id === updatedRoom.id ? updatedRoom : r))
+                    : [...prev, updatedRoom];
+                localStorage.setItem("myRooms", JSON.stringify(newRooms));
+                return newRooms;
+            });
+
+            // ✅ Cập nhật publicRooms
+            setPublicRooms(prev => prev.map(r => (r.id === updatedRoom.id ? updatedRoom : r)));
+
+            // ✅ Cập nhật selectedRoom
+            setSelectedRoom(updatedRoom);
+            setMembers(members);
+            localStorage.setItem("selectedRoom", JSON.stringify(updatedRoom));
+
+            toast.success("Bạn đã tham gia phòng thành công");
         } catch (err: any) {
-            toast.error(err.message || "Không thể tham gia phòng");
+            toast.error(err.response?.data?.message || err.message || "Không thể tham gia phòng");
+        }
+    };
+    const mergeRooms = (
+        myData: Room[],
+        publicData: Room[],
+        savedMyRooms: Room[],
+        currentUserId: string
+    ): Room[] => {
+        const processRoom = (r: Room, joinedDefault: boolean): Room => {
+            const members = ensureOwnerInMembers(r, r.members || []);
+            const saved = savedMyRooms.find(s => s.id === r.id);
+
+            const isMine = String(r.nguoi_tao_id) === currentUserId;
+            const joined = saved?.joined ?? joinedDefault ?? false;
+
+            return {
+                ...r,
+                members,
+                isMine,
+                joined,
+            };
+        };
+
+        const myRoomsProcessed = myData.map(r => processRoom(r, true));
+        const publicRoomsProcessed = publicData.map(r => processRoom(r, false));
+
+        // Lấy tất cả phòng đã join (isMine || joined) làm myRooms
+        const myRoomsMerged = [...myRoomsProcessed, ...publicRoomsProcessed.filter(r => r.isMine || r.joined)];
+
+        return myRoomsMerged;
+    };
+
+    // ==================== Phần trên component ====================
+    const fetchRoomsFull = async (options?: { keepSelected?: boolean }) => {
+        const token = localStorage.getItem("token");
+        if (!token) return;
+
+        const localSurveyUrl = localStorage.getItem("latest_survey_url") || null;
+        const savedMyRooms: Room[] = JSON.parse(localStorage.getItem("myRooms") || "[]");
+        const savedSelectedRoom: Room | null = JSON.parse(localStorage.getItem("selectedRoom") || "null");
+
+        const normalizeMembers = (detailData: any, oldMembers?: Member[], currentUserId?: string): Member[] => {
+            const ownerId = detailData.nguoi_tao_id ? String(detailData.nguoi_tao_id) : null;
+
+            const owner: Member | null = ownerId
+                ? {
+                    id: ownerId,
+                    name: detailData.nguoi_tao_ten || "Chủ phòng",
+                    email: detailData.nguoi_tao_email || "Chưa cập nhật",
+                    status: "owner",
+                    canRemove: false,
+                }
+                : null;
+
+            const apiMembers: Member[] = (detailData.members || [])
+                .filter((m: any) => ownerId !== String(m.user_id))
+                .map((m: any) => ({
+                    id: String(m.user_id),
+                    name: m.ten_nguoi_dung || "",
+                    email: m.email || "",
+                    status: m.status || "active",
+                    canRemove: true,
+                }));
+
+            let mergedMembers: Member[] = [...apiMembers];
+            if (owner) mergedMembers.unshift(owner);
+
+            if (currentUserId && mergedMembers.some(m => m.id === currentUserId)) {
+                mergedMembers = mergedMembers.map(m =>
+                    m.id === currentUserId ? { ...m, name: "Bạn" } : m
+                );
+            }
+
+            if (oldMembers) {
+                oldMembers.forEach(m => {
+                    if (!mergedMembers.some(x => x.id === m.id)) {
+                        mergedMembers.push(m);
+                    }
+                });
+            }
+
+            return mergedMembers.filter(
+                (m, index, self) => self.findIndex(x => x.id === m.id) === index
+            );
+        };
+
+        try {
+            const currentUserId = String(userId);
+
+            // 1️⃣ Fetch myRooms + publicRooms cùng lúc
+            const [resMy, resPublic] = await Promise.all([
+                axios.get(`${API_BASE}/rooms`, { headers: { Authorization: `Bearer ${token}` } }),
+                axios.get(`${API_BASE}/lobby`, { headers: { Authorization: `Bearer ${token}` } }),
+            ]);
+
+            const myData: Room[] = resMy.data.data || [];
+            const publicData: Room[] = resPublic.data.data || resPublic.data.rooms || [];
+
+            // 2️⃣ Merge rooms
+            const mergeRoom = (r: Room, saved?: Room, joinedDefault = false): Room => {
+                // ✅ Nếu keepSelected && đây là selectedRoom, dùng members hiện tại
+                let members = options?.keepSelected && savedSelectedRoom && r.id === savedSelectedRoom.id
+                    ? savedSelectedRoom.members
+                    : [...(r.members?.length ? r.members : saved?.members || [])];
+
+                const ownerId = String(r.nguoi_tao_id);
+                members = members.map(m =>
+                    String(m.id) === ownerId ? { ...m, status: "owner" } : m
+                );
+
+                const khao_sat = {
+                    ...saved?.khao_sat,
+                    ...r.khao_sat,
+                    public_link: r.khao_sat?.public_link ?? saved?.khao_sat?.public_link ?? localSurveyUrl ?? undefined,
+                };
+
+                const isMine = String(r.nguoi_tao_id) === currentUserId;
+                const joined = saved?.joined ?? joinedDefault;
+
+                return {
+                    ...r,
+                    members,
+                    isMine,
+                    joined,
+                    khao_sat,
+                    khao_sat_link: khao_sat.public_link,
+                };
+            };
+
+            const mergedMyRooms: Room[] = [
+                ...myData.map(r => mergeRoom(r, savedMyRooms.find(s => s.id === r.id), true)),
+                ...publicData
+                    .map(r => mergeRoom(r, savedMyRooms.find(s => s.id === r.id), false))
+                    .filter(r => r.joined),
+            ];
+
+            // ✅ Loại bỏ duplicate theo id
+            const finalMyRooms = mergedMyRooms.filter(
+                (room, index, self) => self.findIndex(r => r.id === room.id) === index
+            );
+
+            setMyRooms(finalMyRooms);
+            localStorage.setItem("myRooms", JSON.stringify(finalMyRooms));
+
+            // 3️⃣ Fetch full public rooms + members
+            const fullPublicRooms: Room[] = await Promise.all(
+                publicData.map(async r => {
+                    try {
+                        const resMembers = await axios.get(`${API_BASE}/rooms/${r.id}/participants`, {
+                            headers: { Authorization: `Bearer ${token}` },
+                        });
+
+                        let members: Member[] = (resMembers.data.participants || []).map((p: any) => ({
+                            id: String(p.user_id),
+                            name: p.ten_nguoi_dung || "",
+                            email: p.email || "",
+                            status: p.status || "active",
+                        }));
+
+                        // ✅ Thêm chủ phòng luôn
+                        const ownerId = String(r.nguoi_tao_id);
+                        if (!members.some(m => m.id === ownerId)) {
+                            members.unshift({
+                                id: ownerId,
+                                name: r.nguoi_tao_ten || "Chủ phòng",
+                                email: r.nguoi_tao_email || "",
+                                status: "owner",
+                            });
+                        }
+
+                        const joined = members.some(m => m.id === String(userId));
+                        const isMine = ownerId === String(userId);
+
+                        return { ...r, members, joined, isMine };
+                    } catch (err) {
+                        console.error("Lỗi fetch members:", err);
+                        return { ...r, members: [], joined: false, isMine: false };
+                    }
+                })
+            );
+
+            setPublicRooms(fullPublicRooms);
+
+
+            // 4️⃣ Cập nhật selectedRoom
+            if (options?.keepSelected && savedSelectedRoom) {
+                const updatedSelected = mergedMyRooms.find(r => String(r.id) === String(savedSelectedRoom.id));
+                if (updatedSelected) {
+                    const detailRes = await getRoomDetailAPI(updatedSelected.id, token);
+                    const detailData = detailRes.data;
+                    const mergedMembers = normalizeMembers(detailData, savedSelectedRoom.members, currentUserId);
+
+                    setSelectedRoom({ ...updatedSelected, ...detailData, members: mergedMembers });
+                    setMembers(mergedMembers);
+                } else {
+                    setSelectedRoom(null);
+                    setMembers([]);
+                }
+            }
+        } catch (err) {
+            console.error("Lỗi fetchRoomsFull:", err);
+            toast.error("Không lấy được danh sách phòng");
         }
     };
 
+
+    // ==================== useEffect chạy fetchRoomsFull lần đầu ====================
+    useEffect(() => {
+        fetchRoomsFull(); // chạy lần đầu
+        const interval = setInterval(() => fetchRoomsFull(), 1000); // chạy định kỳ
+        return () => clearInterval(interval);
+    }, []);
+
+
+    const handleLockRoom = async (roomId: number, lock: boolean) => {
+        if (!token) return toast.error("Bạn phải đăng nhập để thực hiện");
+      
+        try {
+          setIsLocking(true);
+      
+          let res;
+          if (lock) {
+            // Lock room
+            res = await axios.post(`${API_BASE}/rooms/${roomId}/lock`, null, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+          } else {
+            // Unlock room
+            res = await axios.put(`${API_BASE}/rooms/${roomId}/unlock`, null, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+          }
+      
+          // Cập nhật state
+          setSelectedRoom(prev => prev ? { ...prev, is_locked: lock } : prev);
+          setMyRooms(prev => prev.map(r => r.id === roomId ? { ...r, is_locked: lock } : r));
+          setPublicRooms(prev => prev.map(r => r.id === roomId ? { ...r, is_locked: lock } : r));
+      
+          toast.success(res.data.message || `Phòng đã ${lock ? 'khóa' : 'mở khóa'}`);
+        } catch (err: any) {
+          if (err.response?.status === 401) toast.error("Bạn phải đăng nhập để thực hiện hành động này");
+          else if (err.response?.status === 403) toast.error("Bạn không có quyền thực hiện hành động này");
+          else if (err.response?.status === 404) toast.error("Phòng không tồn tại");
+          else toast.error(err.response?.data?.error || "Không thể thay đổi trạng thái phòng");
+        } finally {
+          setIsLocking(false);
+        }
+      };
+      
+      
+      
+          const fetchMembers = async (roomId: number) => {
+              if (!token) return;
+              try {
+                  const res = await getRoomParticipantsAPI(roomId, token);
+                  const mappedMembers: Member[] = (res.data.participants || []).map((p: any) => ({
+                      id: String(p.user_id),          // dùng user_id làm id
+                      name: p.ten_nguoi_dung || "",   // map tên
+                      email: p.email || ""            // nếu API không có email thì để rỗng
+                  }));
+                  setMembers(mappedMembers);
+              } catch (err: any) {
+                  toast.error("Không lấy được danh sách thành viên");
+              }
+          };
+      
+          const checkRoomExists = async (roomId) => {
+              try {
+                  const response = await axios.get(`${API_BASE}/rooms/${roomId}`, {
+                      headers: { Authorization: `Bearer ${token}` },
+                  });
+                  return response.data; // Nếu phòng tồn tại, trả về dữ liệu phòng
+              } catch (error) {
+                  console.error("Phòng không tồn tại:", error.response.data);
+                  return null; // Nếu phòng không tồn tại, trả về null
+              }
+          };
     return (
         <div className="min-h-screen bg-background">
             <Header />
@@ -619,7 +1005,9 @@ const handleLockRoom = async (roomId: number, lock: boolean) => {
                             </Button>
                             {/* Nút Phòng đã lưu trữ */}
                             <ArchiveDialog
+                                token={token}
                                 onRestore={(room) => {
+                                    // Cập nhật danh sách myRooms
                                     setMyRooms(prev => [
                                         {
                                             id: Number(room.id),
@@ -639,6 +1027,7 @@ const handleLockRoom = async (roomId: number, lock: boolean) => {
                                     ]);
                                 }}
                             />
+
                             <Dialog open={showInviteDialog} onOpenChange={setShowInviteDialog}>
                                 <DialogTrigger asChild>
                                     <Button className="relative flex items-center gap-2" variant="outline">
@@ -648,18 +1037,71 @@ const handleLockRoom = async (roomId: number, lock: boolean) => {
                                 <DialogContent className="max-w-md">
                                     <DialogHeader>
                                         <DialogTitle>Tham gia phòng</DialogTitle>
-                                        <DialogDescription>
-                                            Nhập URL phòng để tham gia
-                                        </DialogDescription>
+                                        <DialogDescription>Nhập URL phòng để tham gia</DialogDescription>
                                     </DialogHeader>
+
                                     <Input
                                         placeholder="Nhập URL phòng"
                                         value={joinRoomURL}
-                                        onChange={(e) => setJoinRoomURL(e.target.value)}
+                                        onChange={async (e) => {
+                                            const url = e.target.value;
+                                            setJoinRoomURL(url);
+                                            setRoomPassword(""); // reset password
+                                            setRequirePassword(false); // reset requirePassword
+
+                                            // Kiểm tra URL hợp lệ chưa
+                                            const match = url.match(
+                                                /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i
+                                            );
+                                            if (!match) return;
+
+                                            const shareURL = match[0];
+
+                                            try {
+                                                const roomRes = await axios.get(`${API_BASE}/rooms/share/${shareURL}`);
+                                                const roomData = roomRes.data.room || roomRes.data;
+
+                                                // Nếu phòng require password thì hiển thị input
+                                                if (roomData.require_password) {
+                                                    setRequirePassword(true);
+                                                }
+                                            } catch (err) {
+                                                console.error("Lỗi khi fetch room:", err);
+                                            }
+                                        }}
                                     />
-                                    <Button onClick={handleJoinRoomByURL} className="mt-4">Tham gia</Button>
+
+                                    {requirePassword && (
+                                        <Input
+                                            placeholder="Nhập mật khẩu phòng"
+                                            type="password"
+                                            value={roomPassword}
+                                            onChange={(e) => setRoomPassword(e.target.value)}
+                                            className="mt-2"
+                                        />
+                                    )}
+
+                                    <Button
+                                        onClick={async () => {
+                                            try {
+                                                await handleJoinRoomByURL(); // hàm này sẽ dùng roomPassword nếu có
+                                                setShowInviteDialog(false); // chỉ đóng dialog khi join thành công
+                                                setJoinRoomURL("");
+                                                setRoomPassword("");
+                                                setRequirePassword(false);
+                                            } catch (err) {
+                                                console.error("Lỗi join room:", err);
+                                            }
+                                        }}
+                                        className="mt-4"
+                                    >
+                                        Tham gia
+                                    </Button>
                                 </DialogContent>
                             </Dialog>
+
+
+
                         </div>
                     </div>
                     {/* CREATE FORM */}
@@ -680,6 +1122,55 @@ const handleLockRoom = async (roomId: number, lock: boolean) => {
                                     value={newRoom.mo_ta}
                                     onChange={e => setNewRoom({ ...newRoom, mo_ta: e.target.value })}
                                 />
+
+                                {/* Dropdown chọn khảo sát */}
+                                <div className="mb-4">
+                                    <label className="text-sm font-medium mb-1 block">Chọn khảo sát</label>
+                                    <select
+                                        value={newRoom.khao_sat_id ?? ""}
+                                        onChange={e =>
+                                            setNewRoom({ ...newRoom, khao_sat_id: Number(e.target.value) })
+                                        }
+                                        className="w-full border rounded px-3 py-2"
+                                    >
+                                        <option value="">-- Chọn khảo sát --</option>
+                                        {mySurveys.map(s => (
+                                            <option key={s.id} value={s.id}>
+                                                {s.tieu_de || `Khảo sát #${s.id}`}
+                                            </option>
+                                        ))}
+                                    </select>
+
+                                    {/* Hiển thị URL khảo sát khi đã chọn */}
+                                    {newRoom.khao_sat_id !== null && (() => {
+                                        const selectedSurvey = mySurveys.find(s => s.id === newRoom.khao_sat_id);
+                                        <p>{selectedSurvey.tieu_de || "Khảo sát chưa đặt tiêu đề"}</p>
+
+
+                                        return (
+                                            <div className="mt-2 space-y-1">
+                                                <p className="text-sm font-medium">
+                                                    {selectedSurvey.tieu_de} {/* Tên khảo sát thực */}
+                                                </p>
+                                                {selectedSurvey.public_link ? (
+                                                    <div className="flex items-center justify-between rounded-lg border px-3 py-2 bg-muted/50">
+                                                        <code className="text-sm truncate">{selectedSurvey.public_link}</code>
+                                                        <Button
+                                                            onClick={() => copyInviteCode(selectedSurvey.public_link!)}
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="ml-2 hover:bg-primary/10"
+                                                        >
+                                                            <Copy className="h-4 w-4 text-primary" />
+                                                        </Button>
+                                                    </div>
+                                                ) : (
+                                                    <p className="text-sm text-muted-foreground">Khảo sát này chưa có URL</p>
+                                                )}
+                                            </div>
+                                        );
+                                    })()}
+                                </div>
                                 <div className="flex items-center gap-4">
                                     <label>
                                         <input
@@ -698,6 +1189,7 @@ const handleLockRoom = async (roomId: number, lock: boolean) => {
                                         Khoá (có mật khẩu)
                                     </label>
                                 </div>
+
                                 {newRoom.khoa && (
                                     <Input
                                         type="password"
@@ -706,8 +1198,20 @@ const handleLockRoom = async (roomId: number, lock: boolean) => {
                                         onChange={e => setNewRoom({ ...newRoom, mat_khau: e.target.value })}
                                     />
                                 )}
+
                                 <div className="flex gap-2">
-                                    <Button onClick={handleCreateRoom}>Tạo phòng</Button>
+                                    <Button
+                                        onClick={async () => {
+                                            if (!token) return toast.error("Bạn phải đăng nhập mới tạo được phòng");
+                                            if (!newRoom.ten_room.trim()) return toast.error("Tên phòng không được để trống");
+                                            if (!newRoom.khao_sat_id && !localSurveyUrl)
+                                                return toast.error("Phải chọn hoặc tạo khảo sát trước khi tạo phòng");
+
+                                            await handleCreateRoom();
+                                        }}
+                                    >
+                                        Tạo phòng
+                                    </Button>
                                     <Button variant="outline" onClick={() => setShowCreateForm(false)}>Hủy</Button>
                                 </div>
                             </CardContent>
@@ -822,12 +1326,12 @@ const handleLockRoom = async (roomId: number, lock: boolean) => {
                                             const isMember = (room.members ?? []).some(m => String(m.id) === String(userId));
                                             return isOwner || isMember;
                                         })
-                                        .map(room => {
+                                        .map((room, index) => {  // <-- thêm index ở đây
                                             const isOwner = String(room.nguoi_tao_id) === String(userId);
 
                                             return (
                                                 <Card
-                                                    key={room.id}
+                                                    key={`my-${room.id}-${index}`} // <-- dùng index trong key để đảm bảo unique
                                                     className="hover:shadow-lg transition-shadow cursor-pointer"
                                                     onClick={(e) => {
                                                         if ((e.target as HTMLElement).closest(".no-detail")) return;
@@ -847,7 +1351,11 @@ const handleLockRoom = async (roomId: number, lock: boolean) => {
                                                             {isOwner && (
                                                                 <div className="flex gap-1">
                                                                     <Button
-                                                                        onClick={(e) => { e.stopPropagation(); /* open edit */ }}
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            openEditRoom(room);  // <-- gọi hàm mở edit room
+                                                                            /* open edit */
+                                                                        }}
                                                                         variant="ghost"
                                                                         size="sm"
                                                                         className="no-detail"
@@ -871,15 +1379,20 @@ const handleLockRoom = async (roomId: number, lock: boolean) => {
                                                         <div>
                                                             <div className="flex items-center gap-2 mb-2">
                                                                 <Users className="h-4 w-4 text-muted-foreground" />
-                                                                <span className="text-sm font-medium">Thành viên ({room.members?.length ?? 0})</span>
+                                                                <span className="text-sm font-medium">
+                                                                    Thành viên ({(selectedRoom?.id === room.id ? members.length : room.members?.length) ?? 0})
+                                                                </span>
                                                             </div>
                                                             <div className="flex flex-wrap gap-1">
-                                                                {(room.members ?? []).slice(0, 3).map((member, index) => (
-                                                                    <Badge key={index} variant="secondary" className="text-xs">{member.name}</Badge>
+                                                                {(room.members ?? []).slice(0, 3).map(member => (
+                                                                    <Badge
+                                                                        key={`my-${room.id}-member-${member.id}`}
+                                                                        variant="secondary"
+                                                                        className="text-xs flex items-center gap-1"
+                                                                    >
+                                                                        {member.name}
+                                                                    </Badge>
                                                                 ))}
-                                                                {room.members && room.members.length > 3 && (
-                                                                    <Badge variant="secondary" className="text-xs">+{room.members.length - 3} khác</Badge>
-                                                                )}
                                                             </div>
                                                         </div>
 
@@ -921,9 +1434,9 @@ const handleLockRoom = async (roomId: number, lock: boolean) => {
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                 {publicRooms
                                     .filter(room => room.is_public)
-                                    .map(room => (
+                                    .map((room, index) => (
                                         <Card
-                                            key={room.id}
+                                            key={`public-${room.id}-${index}`}
                                             className="hover:shadow-lg transition-shadow cursor-pointer"
                                             onClick={(e) => {
                                                 if ((e.target as HTMLElement).closest(".no-detail")) return;
@@ -931,14 +1444,16 @@ const handleLockRoom = async (roomId: number, lock: boolean) => {
                                             }}
                                         >
                                             <CardHeader>
-                                                <div>
-                                                    <Badge
-                                                        className={`room-state ${room.is_public ? "bg-primary text-white" : "bg-red-500 text-white"}`}
-                                                    >
-                                                        {room.is_public ? "Công khai" : "Riêng tư"}
-                                                    </Badge>
-                                                    <CardTitle>{room.ten_room}</CardTitle>
-                                                    <CardDescription>{room.mo_ta}</CardDescription>
+                                                <div className="flex justify-between items-center">
+                                                    <div>
+                                                        <Badge
+                                                            className={`room-state ${room.is_public ? "bg-primary text-white" : "bg-red-500 text-white"}`}
+                                                        >
+                                                            {room.is_public ? "Công khai" : "Riêng tư"}
+                                                        </Badge>
+                                                        <CardTitle>{room.ten_room}</CardTitle>
+                                                        <CardDescription>{room.mo_ta}</CardDescription>
+                                                    </div>
                                                 </div>
                                             </CardHeader>
                                             <CardContent className="flex flex-col gap-3">
@@ -947,36 +1462,40 @@ const handleLockRoom = async (roomId: number, lock: boolean) => {
                                                     <div className="flex items-center gap-2 mb-2">
                                                         <Users className="h-4 w-4 text-muted-foreground" />
                                                         <span className="text-sm font-medium">
-                                                            Thành viên ({selectedRoom?.members?.length ?? 0})
+                                                            Thành viên ({room.members?.length ?? 0})
                                                         </span>
                                                     </div>
                                                     <div className="flex flex-wrap gap-1">
-                                                        {(selectedRoom?.members ?? []).slice(0, 3).map((member, index) => (
-                                                            <Badge key={index} variant="secondary" className="text-xs flex items-center gap-1">
-                                                                {member.name}
-                                                                {selectedRoom?.isMine && member.id !== String(userId) && (
-                                                                    <button
-                                                                        onClick={() => handleRemoveMember(selectedRoom.id, member.id)}
-                                                                        className="ml-1 text-red-500 hover:text-red-700 text-[10px]"
-                                                                    >
-                                                                        x
-                                                                    </button>
-                                                                )}
-                                                            </Badge>
-                                                        ))}
-                                                        {selectedRoom?.members && selectedRoom.members.length > 3 && (
-                                                            <Badge variant="secondary" className="text-xs">
-                                                                +{selectedRoom.members.length - 3} khác
-                                                            </Badge>
-                                                        )}
+                                                        {(() => {
+                                                            const ownerId = String(room.nguoi_tao_id);
+                                                            const ownerName = room.nguoi_tao_ten || "Chủ phòng";
+                                                            const membersToShow = room.members ? [...room.members] : [];
+                                                            if (!membersToShow.some(m => String(m.id) === ownerId)) {
+                                                                membersToShow.unshift({
+                                                                    id: ownerId,
+                                                                    name: ownerName,
+                                                                    status: "owner"
+                                                                });
+                                                            }
+                                                            return membersToShow.slice(0, 3).map(member => (
+                                                                <Badge
+                                                                    key={`public-${room.id}-member-${member.id}`}
+                                                                    variant="secondary"
+                                                                    className="text-xs flex items-center gap-1"
+                                                                >
+                                                                    {member.name}
+                                                                </Badge>
+                                                            ));
+                                                        })()}
+
                                                     </div>
                                                 </div>
 
                                                 {/* URL + copy */}
                                                 <div className="flex justify-between items-center">
-                                                    <Badge variant="outline">{selectedRoom?.share_url}</Badge>
+                                                    <Badge variant="outline">{room.share_url}</Badge>
                                                     <Button
-                                                        onClick={() => selectedRoom?.share_url && copyInviteCode(selectedRoom.share_url)}
+                                                        onClick={() => room.share_url && copyInviteCode(room.share_url)}
                                                         variant="ghost"
                                                         size="sm"
                                                     >
@@ -987,17 +1506,32 @@ const handleLockRoom = async (roomId: number, lock: boolean) => {
                                                 {/* Ngày tạo */}
                                                 <div className="text-xs text-muted-foreground pt-2 border-t">
                                                     Ngày tạo:{" "}
-                                                    {selectedRoom?.ngay_tao
-                                                        ? format(new Date(selectedRoom.ngay_tao), "dd/MM/yyyy HH:mm", { locale: vi })
+                                                    {room.ngay_tao
+                                                        ? format(new Date(room.ngay_tao), "dd/MM/yyyy HH:mm", { locale: vi })
                                                         : "Không rõ"}
                                                 </div>
-                                            </CardContent>
 
+                                                {/* 👉 Nút tham gia phòng (chỉ hiện khi chưa tham gia và không phải chủ phòng) */}
+                                                {!room.isMine && (
+                                                    <Button
+                                                        className="mt-2"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            enterRoom(room); // ✅ gọi hàm bạn viết
+                                                        }}
+                                                    >
+                                                        Tham gia phòng
+                                                    </Button>
+                                                )}
+
+                                            </CardContent>
                                         </Card>
                                     ))}
                             </div>
                         </>
                     )}
+
+
                     {/* Dialog Lưu trữ phòng */}
                     {archiveDialogRoom && (
                         <Dialog
@@ -1116,54 +1650,104 @@ const handleLockRoom = async (roomId: number, lock: boolean) => {
                                         <TabsContent value="members" className="space-y-3">
                                             <div className="flex items-center justify-between mb-2">
                                                 <p className="text-sm font-medium text-muted-foreground">Thành viên</p>
-
                                             </div>
+
                                             <div className="space-y-2">
                                                 {members.length > 0 ? (
-                                                    members.map((member: Member) => (
-                                                        <div key={member.id} className="flex items-center justify-between bg-muted px-3 py-2 rounded-lg">
-                                                            <span className="text-sm">{member.name} ({member.email})</span>
-                                                            {selectedRoom?.isMine && member.id !== String(userId) && (
-                                                                <Button
-                                                                    size="sm"
-                                                                    variant="ghost"
-                                                                    className="text-destructive hover:bg-destructive/10"
-                                                                    onClick={() => selectedRoom && handleRemoveMember(selectedRoom.id, member.id)}
-                                                                >
-                                                                    Xoá
-                                                                </Button>
-                                                            )}
-                                                        </div>
-                                                    ))
+                                                    <>
+                                                        {/* Chủ phòng */}
+                                                        {members
+                                                            .filter(m => m.status === "owner")
+                                                            .map(owner => (
+                                                                <div key={owner.id} className="flex items-center justify-between bg-muted px-3 py-2 rounded-lg">
+                                                                    <div className="flex flex-col">
+                                                                        <span className="text-sm font-medium">
+                                                                            {owner.name} <span className="ml-1 text-xs text-primary">(Chủ phòng)</span>
+                                                                        </span>
+                                                                        <span className="text-xs text-muted-foreground italic">
+                                                                            {owner.email?.trim() !== "" ? owner.email : "Chưa cập nhật"}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+
+                                                        {/* Thành viên khác */}
+                                                        {members
+                                                            .filter(m => m.status !== "owner")
+                                                            .map(member => (
+                                                                <div key={member.id} className="flex items-center justify-between bg-muted px-3 py-2 rounded-lg">
+                                                                    <div className="flex flex-col">
+                                                                        <span className="text-sm font-medium">{member.name || "Người dùng"}</span>
+                                                                        <span className="text-xs text-muted-foreground italic">
+                                                                            {member.email?.trim() !== "" ? member.email : "Chưa cập nhật"}
+                                                                        </span>
+                                                                    </div>
+                                                                    {selectedRoom?.isMine && member.id !== String(userId) && (
+                                                                        <Button
+                                                                            size="sm"
+                                                                            variant="ghost"
+                                                                            className="text-destructive hover:bg-destructive/10"
+                                                                            onClick={() => handleRemoveMember(selectedRoom.id, member.id)}
+                                                                        >
+                                                                            Xoá
+                                                                        </Button>
+                                                                    )}
+                                                                </div>
+                                                            ))}
+                                                    </>
                                                 ) : (
                                                     <span className="text-sm text-muted-foreground">Chưa có thành viên nào</span>
                                                 )}
                                             </div>
+
                                         </TabsContent>
+
+                                        {/* SECURITY TAB */}
                                         {/* SECURITY TAB */}
                                         <TabsContent value="security" className="space-y-4">
-                                            <div className="flex items-center gap-2">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={selectedRoom.khoa ?? false}
-                                                    onChange={async (e) => {
-                                                        if (e.target.checked) {
-                                                            const newPass = prompt("Nhập mật khẩu mới:");
-                                                            if (newPass) {
-                                                                await setRoomPasswordAPI(selectedRoom.id, token!, newPass);
-                                                                toast.success("Đã đặt mật khẩu");
-                                                                fetchRooms();
+                                            {selectedRoom.isMine ? (
+                                                <div className="flex items-center gap-2">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={!!selectedRoom.mat_khau} // đã đặt mật khẩu hay chưa
+                                                        onChange={async (e) => {
+                                                            if (e.target.checked) {
+                                                                const newPass = prompt("Nhập mật khẩu mới:");
+                                                                if (newPass) {
+                                                                    try {
+                                                                        await setRoomPasswordAPI(selectedRoom.id, token!, newPass);
+                                                                        toast.success("Đã đặt mật khẩu");
+                                                                        fetchRooms(); // refresh danh sách
+                                                                        setSelectedRoom(prev => ({ ...prev!, mat_khau: "****" })); // cập nhật local state
+                                                                    } catch (err) {
+                                                                        console.error("❌ setRoomPasswordAPI error:", err);
+                                                                        toast.error("Không đặt được mật khẩu");
+                                                                    }
+                                                                }
+                                                            } else {
+                                                                try {
+                                                                    await removeRoomPasswordAPI(selectedRoom.id, token!);
+                                                                    toast.success("Đã gỡ mật khẩu");
+                                                                    fetchRooms();
+                                                                    setSelectedRoom(prev => ({ ...prev!, mat_khau: undefined }));
+                                                                } catch (err) {
+                                                                    console.error("❌ removeRoomPasswordAPI error:", err);
+                                                                    toast.error("Không gỡ được mật khẩu");
+                                                                }
                                                             }
-                                                        } else {
-                                                            await removeRoomPasswordAPI(selectedRoom.id, token!);
-                                                            toast.success("Đã gỡ mật khẩu");
-                                                            fetchRooms();
-                                                        }
-                                                    }}
-                                                />
-                                                <span className="text-sm">Khóa phòng (mật khẩu)</span>
-                                            </div>
+                                                        }}
+                                                    />
+                                                    <span className="text-sm">Yêu cầu mật khẩu khi join</span>
+                                                </div>
+                                            ) : (
+                                                <span className="text-sm text-muted-foreground">
+                                                    Bạn không có quyền chỉnh bảo mật cho phòng này
+                                                </span>
+                                            )}
                                         </TabsContent>
+
+
+
                                         <TabsContent value="surveys" className="space-y-2">
                                             <p className="text-sm font-medium text-muted-foreground mb-2">Khảo sát đã chọn cho phòng</p>
                                             {selectedRoom && selectedRoom.khao_sat?.public_link ? (
