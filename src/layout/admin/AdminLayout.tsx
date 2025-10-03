@@ -73,10 +73,10 @@ const Admin = () => {
 
             const res = await fetch(`${API_BASE}/api/admin/users`, {
                 headers: {
-                  "Authorization": `Bearer ${token}`,
-                  "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`,
+                    "Content-Type": "application/json",
                 },
-              });
+            });
 
             if (!res.ok) throw new Error("Fetch error");
 
@@ -235,6 +235,17 @@ const Admin = () => {
 
                     {/* Stats Cards */}
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                        {/* xuất file khảo sát */}
+                         <Card>
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <CardTitle className="text-sm font-medium">Xuất file</CardTitle>
+                                <BarChart3 className="h-4 w-4 text-muted-foreground" />
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold">{surveys.length}</div>
+                            </CardContent>
+                        </Card>
+
                         <Card>
                             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                                 <CardTitle className="text-sm font-medium">Tổng khảo sát</CardTitle>

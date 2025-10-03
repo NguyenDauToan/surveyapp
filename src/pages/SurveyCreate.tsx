@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,7 +11,10 @@ import { Plus, Trash2, Eye, Save, Type, List, Star, ToggleLeft } from "lucide-re
 import { toast } from "sonner";
 import { createSurveyAPI, addQuestionAPI } from "@/api/Api";
 import Header from "@/components/Header";
-import { Image } from "lucide-react";
+import { Image } from "lucide-react"; 
+import axios from "axios";
+
+import { shareFormAPI } from "@/api/Api";
 
 interface Question {
   id: string;
@@ -26,14 +30,29 @@ interface Survey {
   questions: Question[];
 }
 
-const SurveyCreate = () => {
-  // ---------------- States ----------------
-  const [survey, setSurvey] = useState<Survey>({
-    title: "",
-    description: "",
-    questions: [],
-  });
-  const [surveyLink, setSurveyLink] = useState<string | null>(null);
+interface SurveyCreateProps {
+  existingSurvey?: any; // optional, nếu có sẵn khảo sát
+  onSave?: (updatedSurvey: any) => Promise<void>; // callback khi lưu xong
+}
+
+// const SurveyCreate = () => {
+//   const [survey, setSurvey] = useState<Survey>({
+//     title: "",
+//     description: "",
+//     questions: [],
+const SurveyCreate = ({ existingSurvey, onSave }: SurveyCreateProps) => {
+  const [survey, setSurvey] = useState<Survey>(
+    existingSurvey || {
+      title: "",
+      description: "",
+      questions: [],
+      settings: { collect_email: false },
+      end_date: ""
+    }
+  );
+
+    const [surveyLink, setSurveyLink] = useState<string | null>(null);
+
   const [maxResponses, setMaxResponses] = useState<number | null>(null);
   const [isLimited, setIsLimited] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
@@ -43,6 +62,8 @@ const SurveyCreate = () => {
     required: false,
     options: [],
   });
+
+  // ================== SETTINGS ==================
   const [settings, setSettings] = useState({
     max_responses: null as number | null,
     collect_email: false,
@@ -58,21 +79,9 @@ const SurveyCreate = () => {
     { value: "multiple-choice", label: "Trắc nghiệm", icon: List },
     { value: "rating", label: "Đánh giá sao", icon: Star },
     { value: "yes-no", label: "Có/Không", icon: ToggleLeft },
-    { value: "file-upload", label: "Tải ảnh lên", icon: Image },
+    { value: "file-upload", label: "Tải ảnh lên", icon: Image }, // 🆕
   ];
 
-  // ---------------- Load draft từ localStorage ----------------
-  useEffect(() => {
-    const draft = localStorage.getItem("draft_survey");
-    if (draft) setSurvey(JSON.parse(draft));
-  }, []);
-
-  // ---------------- Lưu draft tự động ----------------
-  useEffect(() => {
-    localStorage.setItem("draft_survey", JSON.stringify(survey));
-  }, [survey]);
-
-  // ---------------- Helper functions ----------------
   const addQuestion = () => {
     if (!newQuestion.title) {
       toast.error("Vui lòng nhập tiêu đề câu hỏi");
@@ -84,95 +93,177 @@ const SurveyCreate = () => {
       title: newQuestion.title,
       required: newQuestion.required || false,
       options: newQuestion.type === "multiple-choice" ? newQuestion.options || [] : undefined,
+
     };
-    setSurvey((prev) => ({ ...prev, questions: [...prev.questions, question] }));
+    setSurvey((prev) => ({
+      ...prev,
+      questions: [...prev.questions, question],
+    }));
     setNewQuestion({ type: "text", title: "", required: false, options: [] });
     toast.success("Đã thêm câu hỏi thành công!");
   };
 
   const removeQuestion = (id: string) => {
-    setSurvey((prev) => ({ ...prev, questions: prev.questions.filter((q) => q.id !== id) }));
+    setSurvey((prev) => ({
+      ...prev,
+      questions: prev.questions.filter((q) => q.id !== id),
+    }));
     toast.success("Đã xóa câu hỏi!");
   };
 
   const mapType = (type: string) => {
     switch (type) {
-      case "text": return "fill_blank";
-      case "multiple-choice": return "multiple_choice";
-      case "rating": return "rating";
-      case "yes-no": return "true_false";
-      case "file-upload": return "file_upload";
-      default: return "fill_blank";
+      case "text":
+        return "fill_blank";
+      case "multiple-choice":
+        return "multiple_choice";
+      case "rating":
+        return "rating";
+      case "yes-no":
+        return "true_false";
+      case "file-upload":
+        return "file_upload";
+      default:
+        return "fill_blank";
     }
   };
 
-  // ---------------- Save survey (local + backend) ----------------
   const saveSurvey = async () => {
-    console.log("📌 [saveSurvey] Start saving survey", survey, settings);
+    console.log(" [saveSurvey] Start saving survey");
+    console.log(" [saveSurvey] Survey state:", survey);
+    console.log(" [saveSurvey] Settings:", settings);
 
     if (!survey.title) return toast.error("Nhập tiêu đề");
     if (survey.questions.length === 0) return toast.error("Chưa có câu hỏi");
 
     const rawToken = localStorage.getItem("token");
     const token = rawToken && rawToken !== "null" && rawToken !== "undefined" ? rawToken : undefined;
-    console.log("📌 [saveSurvey] Token:", token);
+    console.log(" [saveSurvey] Token:", token);
 
     try {
-      // ===== Tạo khảo sát trên database =====
+      // ===== Tạo khảo sát =====
       const newSurvey = await createSurveyAPI(token || "", {
         title: survey.title,
         description: survey.description,
         is_active: true,
-        settings: { ...settings, max_responses: isLimited ? maxResponses : null },
+        settings: {
+          ...settings,
+          max_responses: isLimited ? maxResponses : null,
+        },
       });
 
       const formId = newSurvey.ID || newSurvey.id;
       if (!formId) throw new Error("Không lấy được ID khảo sát");
 
-      console.log("✅ [saveSurvey] Survey created:", newSurvey);
+      console.log(" [saveSurvey] Survey created:", newSurvey);
+      console.log(" [saveSurvey] formId gửi lên:", formId);
 
-      // Lấy edit_token nếu cần
+      // Luôn lấy edit_token từ response để gửi khi thêm câu hỏi
       const editToken = newSurvey.edit_token;
+      console.log("📌 [saveSurvey] editToken:", editToken);
 
       // ===== Thêm câu hỏi =====
       for (const q of survey.questions) {
         const payload = {
           type: mapType(q.type),
           content: q.title,
-          props: JSON.stringify({ required: q.required, options: q.options || [] }),
+          props: JSON.stringify({
+            required: q.required,
+            options: q.options || [],
+          }),
         };
 
-        const useEditToken = !token || !newSurvey.owner_id ? newSurvey.edit_token : undefined;
-        await addQuestionAPI(formId, payload, token && newSurvey.owner_id ? token : undefined, useEditToken);
+        try {
+          console.log("➡️ [saveSurvey] Add question payload:", payload);
+
+          // Nếu survey mới tạo mà owner_id chưa có → dùng editToken
+          const useEditToken = !token || !newSurvey.owner_id ? newSurvey.edit_token : undefined;
+
+          const addedQuestion = await addQuestionAPI(formId, payload, token && newSurvey.owner_id ? token : undefined, useEditToken);
+
+          console.log(`✅ [saveSurvey] Added question: ${q.title}`, addedQuestion);
+        } catch (err: any) {
+          console.error("❌ [saveSurvey] Add question error:", {
+            question: q.title,
+            status: err.status,
+            data: err.data,
+            message: err.message,
+          });
+          toast.error(`Lỗi khi thêm câu hỏi "${q.title}": ${err.data?.message || err.message}`);
+          return; // dừng nếu có lỗi
+        }
       }
 
-      // ===== Xử lý localStorage =====
-      localStorage.removeItem("draft_survey"); // xóa draft sau khi lưu backend
-      toast.success("🎉 Đã lưu khảo sát thành công!");
+      toast.success("🎉 Đã lưu khảo sát và câu hỏi vào database!");
+      if (onSave) await onSave(survey);
 
-      // ===== Hiển thị link khảo sát =====
-      const link = `${window.location.origin}/survey/${formId}`;
-      setSurveyLink(link);
-      console.log("📌 [saveSurvey] Survey link:", link);
+      // const link = `${window.location.origin}/survey/${formId}`;
+// const link = `https://survey-server-m884.onrender.com/surveyapp/survey/${formId}`;
+// const link = `${window.location.origin}/surveyapp/survey/${formId}`;
+//     setSurveyLink(link);
+//     console.log("📌 Survey link:", link);
+// Giả sử gọi API tạo share link
+// ===== tạo share link trên backend =====
+const shareRes = await axios.post(
+  `https://survey-server-m884.onrender.com/api/forms/${formId}/share`,
+  {},
+  { headers: { Authorization: `Bearer ${token}` } }
+);
+
+const shareToken = shareRes.data.share_url.split("/").pop();
+if (!shareToken) throw new Error("Không lấy được share token từ backend");
+
+const FE_BASE = `${window.location.origin}/surveyapp`; // FE base path
+const surveyFEUrl = `${FE_BASE}/survey/${shareToken}`;
+setSurveyLink(surveyFEUrl);
+
+console.log(" Link FE đầy đủ:", surveyFEUrl);
+
+const baseUrl = "https://survey-server-m884.onrender.com";
+const embedCode = shareRes.data.embed_code.replace("http://localhost:8080", baseUrl);
+
+console.log(" Embed code:", embedCode);
+
+await axios.put(
+    `https://survey-server-m884.onrender.com/api/forms/${formId}/update-publiclink`,
+    { public_link: surveyFEUrl },
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+
+  toast.success("Đã cập nhật public link thành công!");
 
     } catch (err: any) {
-      console.error("❌ [saveSurvey] Error:", err);
+      console.error(" [saveSurvey] Save survey error:", {
+        status: err.status,
+        data: err.data,
+        message: err.message,
+      });
       toast.error(err.data?.message || err.message || "Lỗi khi lưu khảo sát");
     }
   };
 
+
   const addOption = () => {
     if (newQuestion.type === "multiple-choice") {
-      setNewQuestion(prev => ({ ...prev, options: [...(prev.options || []), ""] }));
+      setNewQuestion((prev) => ({
+        ...prev,
+        options: [...(prev.options || []), ""],
+      }));
     }
   };
 
   const updateOption = (index: number, value: string) => {
-    setNewQuestion(prev => ({ ...prev, options: prev.options?.map((opt, i) => (i === index ? value : opt)) }));
+    setNewQuestion((prev) => ({
+      ...prev,
+      options: prev.options?.map((opt, i) => (i === index ? value : opt)),
+    }));
   };
 
   const removeOption = (index: number) => {
-    setNewQuestion(prev => ({ ...prev, options: prev.options?.filter((_, i) => i !== index) }));
+    setNewQuestion((prev) => ({
+      ...prev,
+      options: prev.options?.filter((_, i) => i !== index),
+    }));
   };
 
   return (
@@ -299,11 +390,12 @@ const SurveyCreate = () => {
                   </SelectContent>
                 </Select>
               </div>
+              
               {newQuestion.type === "file-upload" && (
                 <div>
-                  <Label>Người trả lời sẽ tải ảnh lên</Label>
+                  <Label>Người trả lời sẽ tải file lên</Label>
                   <p className="text-sm text-muted-foreground">
-                    Chấp nhận file ảnh: JPG, PNG (tối đa 5MB)
+                    Chấp nhận file: JPG, PNG , pdf
                   </p>
                   {/* Khi tạo câu hỏi chỉ preview, không upload thật */}
                   <Input type="file" accept="image/*" disabled />
@@ -482,24 +574,17 @@ const SurveyCreate = () => {
               </DialogContent>
             </Dialog>
             {surveyLink && (
-              <div className="p-4 border rounded bg-green-50 text-green-700 flex flex-col sm:flex-row gap-2">
-                <p className="flex-1">Khảo sát đã tạo thành công!</p>
-                <div className="flex gap-2 items-center">
-                  <input readOnly value={surveyLink} className="border px-2 py-1 rounded w-64 text-sm" />
-                  <button
-                    className="bg-primary text-white px-3 py-1 rounded"
-                    onClick={() => {
-                      navigator.clipboard.writeText(surveyLink);
-                      toast.success("Đã sao chép link!");
-                    }}
-                  >
-                    Sao chép
-                  </button>
-                </div>
-              </div>
-            )}
+        <div className="mt-4">
+          <p className="font-semibold">Link khảo sát:</p>
+          <a href={surveyLink} target="_blank" rel="noreferrer" className="text-blue-500 underline">
+            {surveyLink}
+          </a>
+        </div>
+      )}
+
             <Button onClick={saveSurvey}>
-              <Save className="h-4 w-4 mr-2" /> Lưu khảo sát
+              <Save className="h-4 w-4 mr-2" />
+              Lưu khảo sát
             </Button>
           </div>
         </div>
