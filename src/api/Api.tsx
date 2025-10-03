@@ -397,7 +397,8 @@ export const updateRoomAPI = async (
   payload: {
     ten_room?: string;
     mo_ta?: string;
-    khao_sat_id?: number;
+    khao_sat_id?: number | null;       // thêm
+    khao_sat_link?: string | null;     // thêm
     is_public?: boolean;
     khoa?: boolean;
     mat_khau?: string;
