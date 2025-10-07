@@ -50,32 +50,33 @@ export default function UserProfileModal({ open, onOpenChange }: Props) {
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Thông tin tài khoản</DialogTitle>
-        </DialogHeader>
+  <Dialog open={open} onOpenChange={onOpenChange}>
+  <DialogContent className="max-w-md">
+<DialogHeader className="p-2 border-b-2 ">
+      <DialogTitle className="text-center">
+        Thông tin tài khoản
+      </DialogTitle>
+    </DialogHeader>
 
-        {loading ? (
-          <p className="text-center py-6">Đang tải...</p>
-        ) : !user ? (
-          <p className="text-center py-6 text-muted-foreground">Không tải được dữ liệu</p>
-        ) : (
-          <div className="space-y-4 mt-2">
-            <p><strong>Tên:</strong> {user.ten}</p>
-            <p><strong>Email:</strong> {user.email}</p>
-            <p><strong>Ngày tạo:</strong> {new Date(user.ngay_tao).toLocaleString()}</p>
-          </div>
-        )}
+    {loading ? (
+      <p className="text-center py-6">Đang tải...</p>
+    ) : !user ? (
+      <p className="text-center py-6 text-muted-foreground">Không tải được dữ liệu</p>
+    ) : (
+      <div className="space-y-4 mt-2">
+        <p><strong>Tên:</strong> {user.ten}</p>
+        <p><strong>Email:</strong> {user.email}</p>
+        <p><strong>Ngày tạo:</strong> {new Date(user.ngay_tao).toLocaleString()}</p>
+      </div>
+    )}
 
-        <div className="mt-4 flex justify-between">
-          <Button onClick={() => onOpenChange(false)}>Đóng</Button>
-          <Button variant="destructive" onClick={handleLogout}>
-            Đăng xuất
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+    <div className="mt-4 flex justify-center">
+      <Button  className="w-full bg-[#13808c] focus-visible:ring-offset-0" variant="destructive" onClick={handleLogout}>
+        Đăng xuất
+      </Button>
+    </div>
+  </DialogContent>
+</Dialog>
   );
 }
     

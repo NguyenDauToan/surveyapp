@@ -15,9 +15,9 @@ const Header = () => {
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [isMySurveyOpen, setIsMySurveyOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false); // ⚡ thêm state cho UserProfileModal
+  const { user } = useSelector((state: RootState) => state.auth);
 
   const dispatch = useDispatch();
-  const { user } = useSelector((state: RootState) => state.auth);
 
   const handleLogout = () => {
     dispatch(logout());
@@ -55,7 +55,7 @@ const Header = () => {
                   className="text-sm font-medium text-foreground cursor-pointer"
                   onClick={() => setProfileOpen(true)}
                 >
-                  👋 Xin chào: {user.Ten || "User"}
+                   Xin chào: {user.ten || "User"}
                 </span>
                 <Button
                   variant="ghost"

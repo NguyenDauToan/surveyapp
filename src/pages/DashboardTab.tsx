@@ -136,6 +136,8 @@ export default function DashboardTab({ formId, token }: DashboardProps) {
             {/* RATING */}
             {q.type === "RATING" && q.stats && (
               <div className="w-full h-40">
+                <span className="text-gray-500">Loại: Đánh giá</span>
+
                 <p className="text-sm mb-2">
                   Avg: {q.stats.avg}, Min: {q.stats.min}, Max: {q.stats.max}
                 </p>
@@ -153,8 +155,9 @@ export default function DashboardTab({ formId, token }: DashboardProps) {
             {/* FILL_BLANK */}
             {q.type === "FILL_BLANK" && q.stats?.length > 0 && (
               <ul className="list-disc list-inside text-sm">
+                <span className="text-gray-500">Loại: Câu hỏi mở</span>
                 {q.stats.map((s: any, idx: number) => (
-                  <li key={idx}>
+                  <li key={idx} className="list-none">
                     {s.answer} – {s.count} lần
                   </li>
                 ))}
@@ -170,9 +173,9 @@ export default function DashboardTab({ formId, token }: DashboardProps) {
                       href={s.file}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-blue-600 underline"
+                      className="text-blue-600 underline list-none"
                     >
-                      File của user {s.user_id}
+                      Tệp đính kèm của người dùng: {s.user_id}
                     </a>
                   </li>
                 ))}

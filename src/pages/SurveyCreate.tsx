@@ -310,14 +310,14 @@ await axios.put(
                 />
                 Thu thập email người trả lời
               </label>
-              <label className="flex items-center gap-2">
+              {/* <label className="flex items-center gap-2">
                 <input
                   type="checkbox"
                   checked={settings.show_progress}
                   onChange={e => setSettings(prev => ({ ...prev, show_progress: e.target.checked }))}
                 />
                 Hiển thị tiến độ khảo sát
-              </label>
+              </label> */}
               <label className="flex items-center gap-2">
                 <input
                   type="checkbox"
