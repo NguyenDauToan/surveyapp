@@ -38,12 +38,24 @@ export default function SurveyPage() {
   const [fieldErrors, setFieldErrors] = useState<Record<number, string>>({});
   const [loginOpen, setLoginOpen] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [authRequired, setAuthRequired] = useState(false); 
-
+  const [authRequired, setAuthRequired] = useState(false);
+  const handleClearAllAnswers = () => {
+    if (window.confirm("Bạn có chắc muốn xóa hết nội dung đã nhập không?")) {
+      setAnswers((prev) =>
+        prev.map((a) => ({
+          ...a,
+          noi_dung: "",
+          lua_chon: null,
+          file: null,
+        }))
+      );
+    }
+  };
 
   // fetch survey
   const fetchSurvey = async () => {
     try {
+      // ✅ KHÔNG bắt buộc token khi xem khảo sát
       const token = localStorage.getItem("token");
       const headers: any = {};
       if (token) headers["Authorization"] = `Bearer ${token}`;
@@ -62,10 +74,11 @@ export default function SurveyPage() {
         lua_chon: "",
       }));
       setAnswers(initAnswers);
-      setAuthRequired(false); // đã fetch thành công
+      setAuthRequired(false);
     } catch (err: any) {
       console.error(err);
       if (err.response?.status === 401) {
+        // Chỉ yêu cầu login nếu backend báo khảo sát riêng tư
         setAuthRequired(true);
         setLoginOpen(true);
         return;
@@ -73,6 +86,7 @@ export default function SurveyPage() {
       setErrorMsg("Không thể tải khảo sát.");
     }
   };
+
 
   useEffect(() => {
     fetchSurvey();
@@ -103,127 +117,102 @@ export default function SurveyPage() {
     }
   };
 
-// handleChange
-const handleChange = (
-  cauHoiId: number,
-  value: string | File | null,
-  type?: "multiple_choice" | "file_upload" | "text" | "true_false"
-) => {
-  setAnswers((prev) =>
-    prev.map((a) => {
-      if (a.cau_hoi_id !== cauHoiId) return a;
+  // handleChange
+  const handleChange = (
+    cauHoiId: number,
+    value: string | File | null,
+    type?: "multiple_choice" | "file_upload" | "text" | "true_false"
+  ) => {
+    setAnswers((prev) =>
+      prev.map((a) => {
+        if (a.cau_hoi_id !== cauHoiId) return a;
 
-      if (type === "multiple_choice" || type === "true_false") {
-        return { ...a, noi_dung: "", lua_chon: JSON.stringify([value]) };
-      }
-      if (type === "file_upload") {
-        return { ...a, file: value instanceof File ? value : undefined };
-      }
-      return { ...a, noi_dung: typeof value === "string" ? value : a.noi_dung };
-    })
-  );
-
-  setFieldErrors((prev) => {
-    const newErrors = { ...prev };
-    delete newErrors[cauHoiId];
-    return newErrors;
-  });
-};
-
-const handleSubmit = async (e: FormEvent) => {
-  e.preventDefault();
-  if (!survey) return;
-
-  setLoading(true);
-  setErrorMsg("");
-  setFieldErrors({});
-
-  try {
-    // Fix: check đúng giá trị loai_cau_hoi
-    const hasFile = answers.some(
-      (a) => a.loai_cau_hoi.toLowerCase() === "file_upload"
+        if (type === "multiple_choice" || type === "true_false") {
+          return { ...a, noi_dung: "", lua_chon: JSON.stringify([value]) };
+        }
+        if (type === "file_upload") {
+          return { ...a, file: value instanceof File ? value : undefined };
+        }
+        return { ...a, noi_dung: typeof value === "string" ? value : a.noi_dung };
+      })
     );
 
-    const token = localStorage.getItem("token");
-    const headers: any = {};
-    if (token) headers["Authorization"] = `Bearer ${token}`;
+    setFieldErrors((prev) => {
+      const newErrors = { ...prev };
+      delete newErrors[cauHoiId];
+      return newErrors;
+    });
+  };
 
-    let payload: FormData | object;
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!survey) return;
 
-    if (hasFile) {
-      const formData = new FormData();
+    setLoading(true);
+    setErrorMsg("");
+    setFieldErrors({});
 
-      // Chuẩn BE-23: key "data" chứa JSON string
-      const data = {
-        khao_sat_id: survey.id,
-        email: email || null,
-        answers: answers.map(({ file, ...rest }) => rest),
-      };
-      formData.append("data", JSON.stringify(data));
+    try {
+      const hasFile = answers.some(
+        (a) => a.loai_cau_hoi.toLowerCase() === "file_upload"
+      );
 
-      // Append file riêng
-      answers.forEach((a) => {
-        if (a.file) formData.append(`file_${a.cau_hoi_id}`, a.file);
-      });
-
-      payload = formData;
-    } else {
-      headers["Content-Type"] = "application/json";
-      payload = { khao_sat_id: survey.id, email: email || null, answers };
-    }
-
-    await axios.post(
-      `https://survey-server-m884.onrender.com/api/forms/${survey.id}/submissions`,
-      payload,
-      { headers }
-    );
-
-    setSubmitted(true);
-  }
-  catch (err: any) {
-  console.error(err);
-
-  const status = err.response?.status;
-  const msg = err.response?.data?.error || err.response?.data?.message || err.message;
-
-  // Nếu lỗi 400 liên quan tới câu hỏi bắt buộc hoặc thiếu file
-  if (status === 400 && typeof msg === "string") {
-    const matchCauHoi = msg.match(/Câu hỏi (\d+)/); 
-    if (matchCauHoi) {
-      const qId = parseInt(matchCauHoi[1], 10);
-      setFieldErrors((prev) => ({
-        ...prev,
-        [qId]: "Đây là câu hỏi bắt buộc",
-      }));
-      setLoading(false);
-      return;
-    }
-
-    // Nếu msg chứa "Thiếu file" thì gán cho câu hỏi tương ứng
-    if (msg.startsWith("Thiếu file")) {
-      const matchFile = msg.match(/(\d+)/); // lấy ID câu hỏi từ thông báo
-      if (matchFile) {
-        const qId = parseInt(matchFile[1], 10);
-        setFieldErrors((prev) => ({
-          ...prev,
-          [qId]: "Đây là câu hỏi bắt buộc",
-        }));
+      const token = localStorage.getItem("token");
+      if (!token) {
+        // 🚨 Nếu chưa đăng nhập thì mở login popup luôn
+        setLoginOpen(true);
         setLoading(false);
         return;
       }
+
+      const headers: any = { Authorization: `Bearer ${token}` };
+      let payload: FormData | object;
+
+      if (hasFile) {
+        const formData = new FormData();
+        const data = {
+          khao_sat_id: survey.id,
+          email: email || null,
+          answers: answers.map(({ file, ...rest }) => rest),
+        };
+        formData.append("data", JSON.stringify(data));
+        answers.forEach((a) => {
+          if (a.file) formData.append(`file_${a.cau_hoi_id}`, a.file);
+        });
+        payload = formData;
+      } else {
+        headers["Content-Type"] = "application/json";
+        payload = { khao_sat_id: survey.id, email: email || null, answers };
+      }
+
+      await axios.post(
+        `https://survey-server-m884.onrender.com/api/forms/${survey.id}/submissions`,
+        payload,
+        { headers }
+      );
+
+      setSubmitted(true);
+    } catch (err: any) {
+      console.error(err);
+
+      if (err.response?.status === 401) {
+        // 🚨 Nếu lỗi 401 khi gửi → mở login
+        setLoginOpen(true);
+        setLoading(false);
+        return;
+      }
+
+      const msg =
+        err.response?.data?.error ||
+        err.response?.data?.message ||
+        err.message;
+
+      const friendlyMsg = mapErrorMessage(err.response?.status, msg);
+      if (friendlyMsg) setErrorMsg(friendlyMsg);
+    } finally {
+      setLoading(false);
     }
-  }
-
-  // Các lỗi tổng thể khác
-  const friendlyMsg = mapErrorMessage(status, msg);
-  if (friendlyMsg) setErrorMsg(friendlyMsg);
-} finally {
-  setLoading(false);
-}
-
-
-};
-
+  };
 
   function mapErrorMessage(status?: number, msg?: any): string | undefined {
     const message = typeof msg === "string" ? msg : JSON.stringify(msg);
@@ -251,15 +240,9 @@ const handleSubmit = async (e: FormEvent) => {
     return (
       <div className="text-center py-10">
         <p>Bạn cần đăng nhập để xem khảo sát.</p>
-        <LoginDialog
-          open={loginOpen}
-          onOpenChange={(open) => {
-            setLoginOpen(open);
-            if (!open) fetchSurveyAfterLogin();
-          }}
-        />
       </div>
     );
+
 
   if (submitted)
     return (
@@ -291,164 +274,194 @@ const handleSubmit = async (e: FormEvent) => {
     );
 
   return (
-    <div className=" bg-gradient-to-b from-[#bceae1] to-[#a8c0bc] w-full h-screen flex justify-center">
-     
-      <div className=" w-[55%] mt-10 mb-auto p-4 shadow-lg rounded-xl  bg-white">
-      <div className="bg-[#f8f6f6] p-6 rounded-[10px]">
-         <h1 className="text-3xl font-bold mb-4 text-center text-[#1d3632]">{survey.tieu_de}</h1>
-        <p className="text-gray-600 mb-6"><span className="font-bold">Mô tả:</span> {survey.mo_ta}</p>
-
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {survey.settings.collect_email && (
-            <div>
-              <label className="block font-medium mb-1">Email (tùy chọn)</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="border border-gray-300 rounded p-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-400"
-                placeholder="abc@example.com"
-              />
-            </div>
-          )}
-
-          {survey.questions.map((q) => {
-            const props = typeof q.props === "string" ? JSON.parse(q.props) : q.props || {};
-            const ans = answers.find((a) => a.cau_hoi_id === q.id);
-
-            return (
-<div
-  key={q.id}
-  className="p-4 border border-gray-200 border-l-4 border-l-[#3fa194] rounded space-y-2 bg-white"
->                <label className="block font-medium text-gray-700">
-                  {q.content} {props.required && <span className="text-red-500">*</span>}
-                </label>
-
-                {q.type.toLowerCase() === "fill_blank" && (
-                  <input
-                    type="text"
-                    className="border border-gray-300 rounded p-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-400"
-                    value={ans?.noi_dung ?? ""}
-                    onChange={(e) => handleChange(q.id, e.target.value)}
-                    placeholder="Nhập câu trả lời..."
-                  />
-                )}
-
-  {q.type.toLowerCase() === "multiple_choice" && (
-    <div className="space-y-1">
-      {props.options?.map((opt: string) => {
-        const ans = answers.find((a) => a.cau_hoi_id === q.id);
-        return (
-          <label key={opt} className="flex items-center gap-2">
-            <input
-              type="radio"
-              name={`multiple_choice_${q.id}`}
-              value={opt}
-              checked={ans?.lua_chon === JSON.stringify([opt])}
-              onChange={() => handleChange(q.id, opt, "multiple_choice")}
-            />
-            <span className="text-gray-700">{opt}</span>
-          </label>
-        );
-      })}
-    </div>
-  )}
-             {q.type.toLowerCase() === "true_false" && (
-                <div className="flex gap-4">
-                  {["Có", "Không"].map((val) => {
-                    const selected =
-                      ans?.lua_chon && Array.isArray(JSON.parse(ans.lua_chon))
-                        ? JSON.parse(ans.lua_chon)[0] === val
-                        : false;
-
-                    return (
-                      <label key={val} className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          name={`true_false_${q.id}`}
-                          value={val}
-                          checked={selected}
-                          onChange={() => handleChange(q.id, val, "true_false")}
-                        />
-                        <span className="text-gray-700">{val}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              )}
+<div className="bg-gradient-to-b from-[#8cded7] to-[#b0eadc] w-full min-h-screen flex flex-col items-center py-10">
+      <div className="w-[55%] mt-5 mb-4 p-4 shadow-lg rounded-xl bg-white border border-gray-200 ">
+        <div className=" p-2 rounded-[10px]">
+          <div className="">
+            <h1 className="text-3xl font-bold mb-6 mt-4 text-center text-[#1d3632] font-['Open Sans'] leading-tight tracking-normal">
+              {survey.tieu_de}
+            </h1>
+            <p className="text-gray-600 mb-6 "><span className="font-bold">Mô tả:</span> {survey.mo_ta}</p>
+          </div>
 
 
-                {q.type.toLowerCase() === "rating" && (
-                  <div className="flex gap-1">
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <svg
-                        key={star}
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 20 20"
-                        fill={Number(ans?.noi_dung) >= star ? "yellow" : "gray"}
-                        className="w-6 h-6 cursor-pointer transition-colors hover:fill-yellow-400"
-                        onClick={() => handleChange(q.id, String(star))}
-                      >
-                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.957a1 1 0 00.95.69h4.15c.969 0 1.371 1.24.588 1.81l-3.36 2.44a1 1 0 00-.364 1.118l1.287 3.957c.3.921-.755 1.688-1.54 1.118l-3.36-2.44a1 1 0 00-1.176 0l-3.36 2.44c-.784.57-1.838-.197-1.539-1.118l1.287-3.957a1 1 0 00-.364-1.118L2.025 9.384c-.783-.57-.38-1.81.588-1.81h4.15a1 1 0 00.95-.69l1.286-3.957z" />
-                      </svg>
-                    ))}
-                  </div>
-                )}
-          
-  {q.type.toLowerCase() === "file_upload" && (
-    <div className="space-y-2">
-      {ans?.file ? (
-        <div className="flex items-center justify-between bg-gray-100 p-2 rounded">
-          <span className="text-sm text-gray-700">{ans.file.name}</span>
-          <button
-            type="button"
-            className="text-red-500 text-sm"
-            onClick={() => handleChange(q.id, null, "file_upload")}
-          >
-            Xóa
-          </button>
-        </div>
-      ) : (
-        <label className="block w-full border border-gray-300 rounded p-2 text-center cursor-pointer bg-white hover:bg-gray-50 relative overflow-hidden">
-          Chọn file
-          <input
-            type="file"
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-            onChange={(e: ChangeEvent<HTMLInputElement>) =>
-              handleChange(q.id, e.target.files?.[0] || null, "file_upload")
-            }
-          />
-        </label>
-      )}
-    </div>
-  )}
-
-
-                {fieldErrors[q.id] && (
-                  <p className="text-red-500 text-sm">{fieldErrors[q.id]}</p>
-                )}
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {survey.settings.collect_email && (
+              <div>
+                <label className="block font-medium mb-1">Email</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="border border-gray-300 rounded p-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  placeholder="abc@example.com"
+                />
               </div>
-            );
-          })}
+            )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-[#3fa194] hover:bg-[#357e73] text-white font-semibold py-3 rounded-lg transition disabled:opacity-50"
-          >
-            {loading ? "Đang gửi..." : "Gửi khảo sát"}
-          </button>
-        </form>
+            {survey.questions.map((q) => {
+              const props = typeof q.props === "string" ? JSON.parse(q.props) : q.props || {};
+              const ans = answers.find((a) => a.cau_hoi_id === q.id);
 
-        {errorMsg && <div className="text-red-600 mt-4 text-center text-sm">{errorMsg}</div>}
+              return (
+                <div
+                  key={q.id}
+                  className="p-3 border border-gray-200 border-l-4 border-l-[#68c386] rounded space-y-2 bg-white"
+                >
+                  <label className="block font-medium text-gray-700">
+                    {q.content} {props.required && <span className="text-red-500">*</span>}
+                  </label>
 
+                  {q.type.toLowerCase() === "fill_blank" && (
+                    <input
+                      type="text"
+                      className="border border-gray-300 rounded p-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-400"
+                      value={ans?.noi_dung ?? ""}
+                      onChange={(e) => handleChange(q.id, e.target.value)}
+                      placeholder="Nhập câu trả lời..."
+                    />
+                  )}
+
+                  {q.type.toLowerCase() === "multiple_choice" && (
+                    <div className="space-y-1">
+                      {props.options?.map((opt: string) => {
+                        const ans = answers.find((a) => a.cau_hoi_id === q.id);
+                        return (
+                          <label key={opt} className="flex items-center gap-2">
+                            <input
+                              type="radio"
+                              name={`multiple_choice_${q.id}`}
+                              value={opt}
+                              checked={ans?.lua_chon === JSON.stringify([opt])}
+                              onChange={() => handleChange(q.id, opt, "multiple_choice")}
+                            />
+                            <span className="text-gray-700">{opt}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {q.type.toLowerCase() === "true_false" && (
+                    <div className="flex gap-4">
+                      {["Có", "Không"].map((val) => {
+                        const selected =
+                          ans?.lua_chon && Array.isArray(JSON.parse(ans.lua_chon))
+                            ? JSON.parse(ans.lua_chon)[0] === val
+                            : false;
+
+                        return (
+                          <label key={val} className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="radio"
+                              name={`true_false_${q.id}`}
+                              value={val}
+                              checked={selected}
+                              onChange={() => handleChange(q.id, val, "true_false")}
+                            />
+                            <span className="text-gray-700">{val}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+
+
+                  {q.type.toLowerCase() === "rating" && (
+                    <div className="flex justify-center gap-3 mt-2">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <svg
+                          key={star}
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 20 20"
+                          fill={Number(ans?.noi_dung) >= star ? "#facc15" : "#d1d5db"} // vàng-400 hoặc xám-300
+                          className="w-6 h-8 cursor-pointer transition-colors hover:fill-yellow-400"
+                          onClick={() => handleChange(q.id, String(star))}
+                        >
+                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.957a1 1 0 00.95.69h4.15c.969 0 1.371 1.24.588 1.81l-3.36 2.44a1 1 0 00-.364 1.118l1.287 3.957c.3.921-.755 1.688-1.54 1.118l-3.36-2.44a1 1 0 00-1.176 0l-3.36 2.44c-.784.57-1.838-.197-1.539-1.118l1.287-3.957a1 1 0 00-.364-1.118L2.025 9.384c-.783-.57-.38-1.81.588-1.81h4.15a1 1 0 00.95-.69l1.286-3.957z" />
+                        </svg>
+                      ))}
+                    </div>
+                  )}
+
+
+
+                  {q.type.toLowerCase() === "file_upload" && (
+                    <div className="space-y-2">
+                      {ans?.file ? (
+                        <div className="flex items-center justify-between bg-gray-100 p-2 rounded">
+                          <span className="text-sm text-gray-700">{ans.file.name}</span>
+                          <button
+                            type="button"
+                            className="text-red-500 text-sm"
+                            onClick={() => handleChange(q.id, null, "file_upload")}
+                          >
+                            Xóa
+                          </button>
+                        </div>
+                      ) : (
+                        <label className="block w-full border border-gray-300 rounded p-2 text-center cursor-pointer bg-white hover:bg-gray-50 relative overflow-hidden">
+                          Chọn file
+                          <input
+                            type="file"
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                            onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                              handleChange(q.id, e.target.files?.[0] || null, "file_upload")
+                            }
+                          />
+                        </label>
+                      )}
+                    </div>
+                  )}
+
+
+                  {fieldErrors[q.id] && (
+                    <p className="text-red-500 text-sm">{fieldErrors[q.id]}</p>
+                  )}
+                </div>
+              );
+            })}
+
+            <div className="flex justify-between items-center mt-6 space-y-3">
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-1/5 bg-gradient-to-r from-[#57b878] to-[#75e373] hover:from-[#4fb870] hover:to-[#7fe27f] text-white font-semibold py-3 rounded-lg transition disabled:opacity-50 shadow-md"
+              >
+                {loading ? "Đang gửi..." : "Gửi khảo sát"}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleClearAllAnswers}
+                className="text-[#499763] font-semibold underline hover:text-[#3e9e61] transition"
+              >
+                Xóa hết câu trả lời
+              </button>
+            </div>
+
+
+          </form>
+          {errorMsg && <div className="text-red-600 mt-4 text-center text-sm">{errorMsg}</div>}
+        </div>
+        
       </div>
-       
-
-       
-      </div>
-      
+      <LoginDialog
+        open={loginOpen}
+        onOpenChange={(open) => {
+          setLoginOpen(open);
+          if (!open) fetchSurveyAfterLogin();
+        }}
+      />
+<div className="text-center mt-3 space-y-1 ">
+  <span className=" text-sm text-gray-500">
+    Lưu ý: Không được gửi mật khẩu hoặc thông tin nhạy cảm qua SurveyPro.
+  </span>
+  <h1 className="mt-4 text-center text-gray-600 text-[1.3rem] font-semibold tracking-wide">
+  SurveyPro
+</h1>
+</div>
     </div>
-  
+
   );
+
 }

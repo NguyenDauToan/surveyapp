@@ -1,6 +1,18 @@
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowRight, Play, BarChart3, Users, CheckCircle, Plus, Settings, FileText, Clock } from "lucide-react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  BarChart3,
+  Users,
+  Plus,
+  FileText,
+  Clock,
+} from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -9,7 +21,7 @@ import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { getMyFormsAPI } from "@/api/Api";
 import FormDetailDialog from "@/pages/FormDetail";
-import { ExportModal } from "./ExportModal"; // import modal export
+import { ExportModal } from "./ExportModal";
 import { Link } from "react-router-dom";
 
 interface HeroProps {
@@ -22,22 +34,35 @@ const Hero = ({ isLoggedIn }: HeroProps) => {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [open, setOpen] = useState(false);
 
-  // --- Export modal state ---
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [selectedSurveyId, setSelectedSurveyId] = useState<number | null>(null);
-//  phân trang 
-  const token = localStorage.getItem("token"); // lấy token
+
+  // ---------------- PHÂN TRANG CLIENT ----------------
+  const [currentPage, setCurrentPage] = useState(1);
+  const surveysPerPage = 5;
+
+  const token = localStorage.getItem("token");
 
   useEffect(() => {
     if (!isLoggedIn || !token) return;
-
     getMyFormsAPI(token)
       .then((data) => setSurveys(data || []))
       .catch((err) => {
-        console.error(" Lỗi load forms:", err);
+        console.error("Lỗi load forms:", err);
         toast.error("Không tải được khảo sát của bạn");
       });
   }, [isLoggedIn, token]);
+
+  // --- Pagination logic ---
+  const totalPages = Math.ceil(surveys.length / surveysPerPage);
+  const indexOfLast = currentPage * surveysPerPage;
+  const indexOfFirst = indexOfLast - surveysPerPage;
+  const currentSurveys = surveys.slice(indexOfFirst, indexOfLast);
+
+  const handlePageChange = (page: number) => {
+    if (page < 1 || page > totalPages) return;
+    setCurrentPage(page);
+  };
 
   const handleOpen = (id: number) => {
     setSelectedId(id);
@@ -107,10 +132,6 @@ const Hero = ({ isLoggedIn }: HeroProps) => {
             <p className="text-sm text-muted-foreground">Sử dụng mẫu khảo sát</p>
           </CardContent>
         </Card>
-{/* 
-      <Link to="/survey/9ffe0650-32ec-4a2f-99fe-8d6085d53e0b">
-  <button className="btn">Mở khảo sát 88 public</button>
-</Link> */}
       </div>
 
       {/* Recent Surveys */}
@@ -123,8 +144,8 @@ const Hero = ({ isLoggedIn }: HeroProps) => {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {surveys.length > 0 ? (
-                  surveys.map((survey) => (
+                {currentSurveys.length > 0 ? (
+                  currentSurveys.map((survey) => (
                     <div
                       key={survey.id}
                       className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors"
@@ -138,7 +159,6 @@ const Hero = ({ isLoggedIn }: HeroProps) => {
                               ? new Date(survey.created_at).toLocaleDateString("vi-VN")
                               : "—"}
                           </span>
-                        
                         </div>
                       </div>
 
@@ -148,15 +168,15 @@ const Hero = ({ isLoggedIn }: HeroProps) => {
                             survey.status === "active"
                               ? "default"
                               : survey.status === "archived"
-                                ? "secondary"
-                                : "outline"
+                              ? "secondary"
+                              : "outline"
                           }
                         >
                           {survey.status === "active"
                             ? "Đang hoạt động"
                             : survey.status === "archived"
-                              ? "Đã lưu trữ"
-                              : "Khác"}
+                            ? "Đã lưu trữ"
+                            : "Khác"}
                         </Badge>
 
                         <Button
@@ -167,7 +187,6 @@ const Hero = ({ isLoggedIn }: HeroProps) => {
                           Xem
                         </Button>
 
-                        {/* Export Button */}
                         <button
                           className="px-3 py-1 border rounded hover:bg-gray-200"
                           onClick={() => openExportModal(survey.id)}
@@ -182,20 +201,44 @@ const Hero = ({ isLoggedIn }: HeroProps) => {
                 )}
               </div>
 
-              <div className="mt-4 pt-4 border-t">
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => navigate("/forms")}
-                >
-                  Xem tất cả khảo sát
-                </Button>
-              </div>
+              {/* Pagination controls */}
+              {surveys.length > surveysPerPage && (
+                <div className="flex justify-center items-center mt-6 gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={currentPage === 1}
+                    onClick={() => handlePageChange(currentPage - 1)}
+                  >
+                    Trước
+                  </Button>
+
+                  {[...Array(totalPages)].map((_, i) => (
+                    <Button
+                      key={i}
+                      variant={currentPage === i + 1 ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => handlePageChange(i + 1)}
+                    >
+                      {i + 1}
+                    </Button>
+                  ))}
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={currentPage === totalPages}
+                    onClick={() => handlePageChange(currentPage + 1)}
+                  >
+                    Sau
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
 
-        {/* Quick Create + Thống kê nhanh */}
+        {/* Quick Create + Stats */}
         <div className="space-y-6">
           <Card>
             <CardHeader>
@@ -226,7 +269,7 @@ const Hero = ({ isLoggedIn }: HeroProps) => {
               <div className="space-y-4">
                 <div className="flex justify-between">
                   <span className="text-sm text-muted-foreground">Tổng khảo sát</span>
-                  <span className="font-semibold">12</span>
+                  <span className="font-semibold">{surveys.length}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-sm text-muted-foreground">Phản hồi hôm nay</span>
@@ -234,7 +277,9 @@ const Hero = ({ isLoggedIn }: HeroProps) => {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-sm text-muted-foreground">Đang hoạt động</span>
-                  <span className="font-semibold">5</span>
+                  <span className="font-semibold">
+                    {surveys.filter((s) => s.status === "active").length}
+                  </span>
                 </div>
               </div>
             </CardContent>
@@ -242,10 +287,8 @@ const Hero = ({ isLoggedIn }: HeroProps) => {
         </div>
       </div>
 
-      {/* Form Detail Dialog */}
       <FormDetailDialog id={selectedId} open={open} onOpenChange={setOpen} />
 
-      {/* Export Modal */}
       {isExportOpen && selectedSurveyId && token && (
         <ExportModal
           surveyId={selectedSurveyId}

@@ -10,6 +10,7 @@ import CloneFormButton from "./CloneFormButton";
 import ViewFormButton from "./ViewFormButton";
 import CloneFormTab from "./CloneFormTab";
 import DeleteFormButton from "./DeleteFormButton";
+import { Edit, Copy, Trash } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -55,46 +56,88 @@ const handleCloneClick = () => {
 };      
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto p-6 ">
-        <DialogHeader>
-          <DialogTitle className="text-2xl font-bold text-center">Chi tiết khảo sát</DialogTitle>
-        </DialogHeader>
+      <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto p-5 ">
+      <DialogHeader className="py-4 bg-gradient-to-r from-[#2fbdaf] to-[#30d8c7] rounded-t-lg mx-[-24px] mt-[-24px] p-5 shadow-sm ">
+  <DialogTitle className="text-2xl font-semibold text-white text-center tracking-wide drop-shadow-sm">
+    Chi tiết khảo sát
+  </DialogTitle>
+</DialogHeader>
+
+
         <Tabs
           value={tab}
           onValueChange={(value: string) => setTab(value as TabType)}
-          className="mt-6"
+          className="mt-6 "
         >
-          <TabsList className="bg-gray-100 rounded-lg p-1 shadow-inner">
-  <TabsTrigger value="detail" className="px-4 py-2 rounded-lg">
-    Chi tiết khảo sát
-  </TabsTrigger>
-  <TabsTrigger value="dashboard" className="px-4 py-2 rounded-lg">
-    Responses Dashboard
-  </TabsTrigger>
-  <TabsTrigger value="submission" className="px-4 py-2 rounded-lg">
-    Danh sách phản hồi
-  </TabsTrigger>
-{/* Nút sửa */}
+<TabsList className="bg-[#efeaea7e] rounded-lg p-1 shadow-inner  shadow-gray-300 flex justify-between items-center">
+  {/* Tabs bên trái */}
+  <div className="flex space-x-2 ">
+    <TabsTrigger
+  value="detail"
+  className="px-4 py-2 rounded-lg text-gray-500 data-[state=active]:bg-[#38e5d4]"
+>
+  Chi tiết khảo sát
+</TabsTrigger>
+
+<TabsTrigger
+  value="dashboard"
+  className="px-4 py-2 rounded-lg text-gray-500 data-[state=active]:bg-[#38e5d4]"
+>
+  Responses Dashboard
+</TabsTrigger>
+
+<TabsTrigger
+  value="submission"
+  className="px-4 py-2 rounded-lg text-gray-500 data-[state=active]:bg-[#38e5d4]"
+>
+  Danh sách phản hồi
+</TabsTrigger>
+  </div>
+
+  {/* Các nút bên phải */}
+ <div className="flex space-x-2 items-center">
   {form && (
-    <button
-      onClick={() => navigate(`/survey/edit/${form.id}`, { state: { survey: form } })}
-      className="px-4 py-2 rounded-lg bg-green-500 text-white hover:bg-green-600 transition ml-2"
-    >
-      Sửa
-    </button>
+    <div className="relative group">
+      <button
+        onClick={() =>
+          navigate(`/survey/edit/${form.id}`, { state: { survey: form } })
+        }
+        className="px-2 py-2 rounded-lg text-gray-600 hover:text-blue-600"
+      >
+        <Edit size={20} />
+      </button>
+      <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap 
+                       bg-gray-800 text-white text-xs rounded py-1 px-2 opacity-0 
+                       group-hover:opacity-100 transition-opacity">
+        Chi tiết khảo sát
+      </span>
+    </div>
   )}
 
- {form && (
-  <CloneFormTab formId={form.id} token={token} />
-)}
-
-  {form &&(
-    <DeleteFormButton id={form.id} />
-
+  {form && (
+    <div className="relative group">
+      <CloneFormTab formId={form.id} token={token} />
+      <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap 
+                       bg-gray-800 text-white text-xs rounded py-1 px-2 opacity-0 
+                       group-hover:opacity-100 transition-opacity">
+        Tạo bản sao
+      </span>
+    </div>
   )}
+
+  {form && (
+    <div className="relative group">
+      <DeleteFormButton id={form.id} />
+      <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap 
+                       bg-gray-800 text-white text-xs rounded py-1 px-2 opacity-0 
+                       group-hover:opacity-100 transition-opacity">
+        Xóa khảo sát
+      </span>
+    </div>
+  )}
+</div>
+
 </TabsList>
-
-
 
           {/* Tab 1: Chi tiết khảo sát */}
           <TabsContent value="detail" className="mt-6">
@@ -116,10 +159,18 @@ const handleCloneClick = () => {
                     <Label className="font-semibold">Mô tả</Label>
                     <Textarea value={form.description} readOnly className="bg-gray-50" />
                   </div>
-                  <div>
+                 <div>
                     <Label className="font-semibold">Link khảo sát</Label>
-                    <Input value={form.public_link} readOnly className="bg-gray-50 text-blue-600 hover:underline cursor-pointer" />
+                    <a
+                      href={form.public_link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block w-full bg-gray-50 text-blue-600 hover:underline cursor-pointer rounded-md border px-3 py-2"
+                    >
+                      {form.public_link}
+                    </a>
                   </div>
+
                 </div>
 
                 {/* Danh sách câu hỏi */}
@@ -130,12 +181,15 @@ const handleCloneClick = () => {
                       form.questions.map((q: any, idx: number) => (
                         <div
                           key={q.id}
-                          className="border p-4 rounded-lg bg-white shadow hover:shadow-md transition-shadow"
+                          className=" p-2  shadow hover:shadow-md transition-shadow"
                         >
-                          <p className="font-medium text-gray-800 mb-1">
+                          <div className="flex justify-between">
+                             <p className="font-medium text-gray-800 mb-1">
                             Câu {idx + 1}: {q.content}
                           </p>
-                          <p className="text-sm text-gray-500 mb-2">Loại: {q.type}</p>
+                          <p className="text-sm text-gray-500 mb-2">Loại câu hỏi: {q.type}</p>
+                          </div>
+                         
                           {q.options?.length > 0 && (
                             <ul className="list-disc list-inside space-y-1">
                               {q.options.map((opt: any) => (
@@ -164,20 +218,17 @@ const handleCloneClick = () => {
           </TabsContent>
 
           {/* Tab 3: Submission List */}
-<TabsContent value="submission" className="mt-6">
-  {id && token ? (
-    <SubmissionListTab formId={id} token={token} />
-  ) : (
-    <div className="flex justify-center items-center h-40 bg-gray-50 rounded-lg border border-gray-200 p-4">
-      <p className="text-gray-500 text-center">
-        Chưa có dữ liệu hoặc chưa đăng nhập
-      </p>
-    </div>
-  )}
-</TabsContent>
-
-
-
+          <TabsContent value="submission" className="mt-6">
+            {id && token ? (
+              <SubmissionListTab formId={id} token={token} />
+            ) : (
+              <div className="flex justify-center items-center h-40 bg-gray-50 rounded-lg border border-gray-200 p-4">
+                <p className="text-gray-500 text-center">
+                  Chưa có dữ liệu hoặc chưa đăng nhập
+                </p>
+              </div>
+            )}
+          </TabsContent>
 
         </Tabs>
       </DialogContent>

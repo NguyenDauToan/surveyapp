@@ -5,6 +5,7 @@ import { toast } from "react-toastify";
 import { useSelector } from "react-redux";
 import { RootState } from "@/redux/store";
 import { useNavigate } from "react-router-dom";
+import { Trash } from "lucide-react";
 
 interface Props {
   id: number | null;
@@ -47,13 +48,19 @@ const handleDelete = async () => {
 
 
   return (
-    <Button
-      variant="destructive"
-      onClick={handleDelete}
-      disabled={loading}
-    >
-      {loading ? "Đang xóa..." : "Xóa form"}
-    </Button>
+   <button
+  onClick={handleDelete}
+  disabled={loading}
+  className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-red-600 transition-colors"
+>
+  {loading ? (
+    "Đang xóa..."
+  ) : (
+    <>
+      <Trash size={20} />
+    </>
+  )}
+</button>
   );
 };
 

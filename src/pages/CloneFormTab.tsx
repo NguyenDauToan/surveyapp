@@ -2,6 +2,7 @@ import { useState } from "react";
 import axios from "axios";
 import { toast, ToastContainer } from "react-toastify";
 import 'react-toastify/dist/ReactToastify.css';
+import { Copy } from "lucide-react";
 
 interface Question {
   id: number;
@@ -92,11 +93,15 @@ export default function CloneFormTab({ formId, token }: CloneFormTabProps) {
   return (
     <div className="inline-block">
       <button
-        className={`px-4 py-2 rounded-lg text-white ${loading ? "bg-gray-400" : "bg-blue-600"}`}
+  className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-blue-600 transition-colors"
         onClick={handleClone}
         disabled={loading}
       >
-        {loading ? "Đang tạo..." : "Tạo bản sao"}
+            {loading ? "Đang tạo..." : (
+        <>
+          <Copy size={20} />
+        </>
+      )}
       </button>
 
       {/* Toast container bắt buộc */}

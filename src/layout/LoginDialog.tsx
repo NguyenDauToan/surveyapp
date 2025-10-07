@@ -5,7 +5,7 @@ import DialogTitle from "@mui/material/DialogTitle";
 import Button from "@mui/material/Button";
 import { useDispatch } from "react-redux";
 import { login } from "@/redux/authSlice";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 
 interface LoginDialogProps {
   open: boolean;
@@ -36,6 +36,8 @@ declare global {
 export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const location = useLocation();
+
   const googleButtonRef = useRef<HTMLDivElement | null>(null);
   const API_BASE = import.meta.env.VITE_API_BASE || "https://survey-server-m884.onrender.com/api";
   const handleCredentialResponse = async (response: GoogleCredentialResponse) => {
@@ -73,8 +75,11 @@ export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
         localStorage.setItem("user", JSON.stringify(user));
         localStorage.setItem("user_id", String(user.id));
 
-        if (user.role === "admin") navigate("/admin");
-        else navigate("/");
+        if (user.role === "admin") {
+  navigate("/admin");
+} else {
+  onOpenChange(false); // chỉ đóng dialog, không navigate
+}
 
         onOpenChange(false);
       } else {
