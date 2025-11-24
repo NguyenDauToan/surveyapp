@@ -198,7 +198,7 @@ const SurveyCreate = ({ existingSurvey, onSave }: SurveyCreateProps) => {
       if (onSave) await onSave(survey);
 
       // const link = `${window.location.origin}/survey/${formId}`;
-// const link = `https://survey-server-m884.onrender.com/surveyapp/survey/${formId}`;
+// const link = `https://survey-server-m884.onrender.com/api/surveyapp/survey/${formId}`;
 // const link = `${window.location.origin}/surveyapp/survey/${formId}`;
 //     setSurveyLink(link);
 //     console.log("📌 Survey link:", link);
@@ -219,8 +219,8 @@ setSurveyLink(surveyFEUrl);
 
 console.log(" Link FE đầy đủ:", surveyFEUrl);
 
-const baseUrl = "https://survey-server-m884.onrender.com";
-const embedCode = shareRes.data.embed_code.replace("http://localhost:8080", baseUrl);
+const baseUrl = "https://survey-server-m884.onrender.com/api";
+const embedCode = shareRes.data.embed_code.replace("https://survey-server-m884.onrender.com/api", baseUrl);
 
 console.log(" Embed code:", embedCode);
 

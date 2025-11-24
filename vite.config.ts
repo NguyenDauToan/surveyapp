@@ -10,7 +10,7 @@ export default defineConfig(({ mode }) => ({
     port: 5173,
     proxy: {
       "/api": {
-        target: "https://survey-server-m884.onrender.com",
+        target: "https://survey-server-m884.onrender.com/api",
         changeOrigin: true,
         secure: false,
       },
