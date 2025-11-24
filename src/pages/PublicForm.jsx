@@ -4,7 +4,7 @@ import axios from "axios";
 
 export default function PublicForm() {
   const { shareToken } = useParams();
-  const API_BASE = "http://localhost:8080";
+  const API_BASE = "https://survey-server-m884.onrender.com/api";
 
   const [form, setForm] = useState(null);
   const [answers, setAnswers] = useState({});

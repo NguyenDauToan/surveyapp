@@ -237,14 +237,22 @@ const RoomPage = () => {
 
         } catch (error: any) {
             console.error("❌ [handleJoinRoomByURL] Lỗi khi join room:", error);
+        
             if (axios.isAxiosError(error)) {
-                console.log("🔹 [handleJoinRoomByURL] Axios error response:", error.response?.data);
-                if (error.response?.status === 400 && error.response?.data?.error?.includes("mật khẩu")) {
-                    setRequirePassword(true);
-                    toast.error("Sai mật khẩu, vui lòng thử lại");
-                } else {
-                    toast.error(error.response?.data?.message || "Không thể tham gia phòng");
+                const errData = error.response?.data;
+                console.log("🔹 [handleJoinRoomByURL] Axios error response:", errData);
+        
+                if (error.response?.status === 400) {
+                    // Kiểm tra lỗi có liên quan mật khẩu
+                    if (errData?.error?.toLowerCase().includes("mật khẩu") || 
+                        errData?.message?.toLowerCase().includes("mật khẩu")) {
+                        setRequirePassword(true);
+                        toast.error("❌ Sai mật khẩu, vui lòng thử lại");
+                        return;
+                    }
                 }
+        
+                toast.error(errData?.message || "Không thể tham gia phòng");
             } else {
                 toast.error("Lỗi không xác định khi tham gia phòng");
             }
@@ -1710,45 +1718,60 @@ const RoomPage = () => {
                                         {/* SECURITY TAB */}
                                         <TabsContent value="security" className="space-y-4">
                                             {selectedRoom.isMine ? (
-                                                <div className="flex items-center gap-2">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={!!selectedRoom.mat_khau} // đã đặt mật khẩu hay chưa
-                                                        onChange={async (e) => {
-                                                            if (e.target.checked) {
-                                                                const newPass = prompt("Nhập mật khẩu mới:");
-                                                                if (newPass) {
+                                                selectedRoom.is_public ? (
+                                                    // 👉 Nếu phòng công khai thì chỉ báo không thể đặt mật khẩu
+                                                    <span className="text-sm text-muted-foreground">
+                                                        Phòng đang công khai, không thể đặt mật khẩu
+                                                    </span>
+                                                ) : (
+                                                    // 👉 Nếu phòng private thì mới cho đặt/gỡ mật khẩu
+                                                    <div className="flex items-center gap-2">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={!!selectedRoom.mat_khau}
+                                                            onChange={async (e) => {
+                                                                if (e.target.checked) {
+                                                                    const newPass = prompt("Nhập mật khẩu mới:");
+                                                                    if (newPass) {
+                                                                        try {
+                                                                            await setRoomPasswordAPI(selectedRoom.id, token!, newPass);
+                                                                            toast.success("Đã đặt mật khẩu");
+                                                                            fetchRooms();
+                                                                            setSelectedRoom((prev) => ({
+                                                                                ...prev!,
+                                                                                mat_khau: "****",
+                                                                            }));
+                                                                        } catch (err) {
+                                                                            console.error("❌ setRoomPasswordAPI error:", err);
+                                                                            toast.error("Không đặt được mật khẩu");
+                                                                        }
+                                                                    }
+                                                                } else {
                                                                     try {
-                                                                        await setRoomPasswordAPI(selectedRoom.id, token!, newPass);
-                                                                        toast.success("Đã đặt mật khẩu");
-                                                                        fetchRooms(); // refresh danh sách
-                                                                        setSelectedRoom(prev => ({ ...prev!, mat_khau: "****" })); // cập nhật local state
+                                                                        await removeRoomPasswordAPI(selectedRoom.id, token!);
+                                                                        toast.success("Đã gỡ mật khẩu");
+                                                                        fetchRooms();
+                                                                        setSelectedRoom((prev) => ({
+                                                                            ...prev!,
+                                                                            mat_khau: undefined,
+                                                                        }));
                                                                     } catch (err) {
-                                                                        console.error("❌ setRoomPasswordAPI error:", err);
-                                                                        toast.error("Không đặt được mật khẩu");
+                                                                        console.error("❌ removeRoomPasswordAPI error:", err);
+                                                                        toast.error("Không gỡ được mật khẩu");
                                                                     }
                                                                 }
-                                                            } else {
-                                                                try {
-                                                                    await removeRoomPasswordAPI(selectedRoom.id, token!);
-                                                                    toast.success("Đã gỡ mật khẩu");
-                                                                    fetchRooms();
-                                                                    setSelectedRoom(prev => ({ ...prev!, mat_khau: undefined }));
-                                                                } catch (err) {
-                                                                    console.error("❌ removeRoomPasswordAPI error:", err);
-                                                                    toast.error("Không gỡ được mật khẩu");
-                                                                }
-                                                            }
-                                                        }}
-                                                    />
-                                                    <span className="text-sm">Yêu cầu mật khẩu khi join</span>
-                                                </div>
+                                                            }}
+                                                        />
+                                                        <span className="text-sm">Yêu cầu mật khẩu khi join</span>
+                                                    </div>
+                                                )
                                             ) : (
                                                 <span className="text-sm text-muted-foreground">
                                                     Bạn không có quyền chỉnh bảo mật cho phòng này
                                                 </span>
                                             )}
                                         </TabsContent>
+
 
 
 
